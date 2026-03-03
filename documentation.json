@@ -1,0 +1,268 @@
+{
+    "projectInfo": {
+        "name": "Sistem Deteksi Manipulasi Gambar (ImageGuard)",
+        "description": "Aplikasi berbasis web untuk mendeteksi manipulasi gambar dengan fitur filter privasi dan pencarian kemiripan gambar baik secara lokal maupun fallback ke web.",
+        "version": "1.0.0",
+        "architecture": "Client-Server (REST API)"
+    },
+    "techStack": {
+        "frontend": {
+            "framework": "React 18",
+            "buildTool": "Vite 5",
+            "styling": "Tailwind CSS v3 (Dark Glassmorphism)",
+            "httpProvider": "Axios"
+        },
+        "backend": {
+            "framework": "Django 5.x",
+            "api": "Django REST Framework (DRF)",
+            "database": "PostgreSQL (dengan fallback SQLite)",
+            "machineLearning": "PyTorch (MobileNetV2)",
+            "externalServices": "Google Cloud Vision API"
+        }
+    },
+    "databaseModels": [
+        {
+            "name": "OriginalDocument",
+            "description": "Menyimpan dokumen gambar asli beserta embedding vektor untuk perbandingan.",
+            "fields": [
+                "id (UUID)",
+                "file_hash",
+                "image_path",
+                "embedding_vector",
+                "created_at"
+            ]
+        },
+        {
+            "name": "DocumentLabel",
+            "description": "Menyimpan label/kategori untuk sebuah dokumen asli.",
+            "fields": [
+                "id",
+                "document (FK)",
+                "label_name",
+                "confidence",
+                "created_at"
+            ]
+        },
+        {
+            "name": "SearchQuery",
+            "description": "Mencatat setiap pencarian yang dilakukan oleh pengguna.",
+            "fields": [
+                "id (UUID)",
+                "query_image_path",
+                "query_hash",
+                "search_source",
+                "created_at"
+            ]
+        },
+        {
+            "name": "PrivacyAnalysis",
+            "description": "Hasil analisis privasi (Pendeteksian info sensitif) dari gambar yang dicari.",
+            "fields": [
+                "id",
+                "search (FK)",
+                "face_detected",
+                "name_detected",
+                "age_detected",
+                "address_detected",
+                "phone_detected",
+                "total_flags",
+                "is_blocked",
+                "created_at"
+            ]
+        },
+        {
+            "name": "SearchResult",
+            "description": "Menyimpan hasil kecocokan (lokal atau google) untuk sebuah pencarian.",
+            "fields": [
+                "id",
+                "search (FK)",
+                "source_type",
+                "matched_document (FK)",
+                "external_url",
+                "similarity_score",
+                "created_at"
+            ]
+        }
+    ],
+    "apiEndpoints": [
+        {
+            "path": "/api/search/",
+            "method": "POST",
+            "description": "Mengunggah gambar untuk dianalisis privasinya, kemudian mencari kemiripan di database lokal atau fallback ke Google Web Detection.",
+            "request": {
+                "contentType": "multipart/form-data",
+                "body": {
+                    "image": "File gambar (JPG, PNG, WEBP)"
+                }
+            },
+            "responses": {
+                "200": "Pencarian berhasil. Mengembalikan hasil kecocokan.",
+                "400": "Permintaan tidak valid (tidak ada gambar).",
+                "403": "Diblokir oleh sistem filter privasi (>= 3 flags).",
+                "500": "Terjadi kesalahan internal (server)."
+            }
+        },
+        {
+            "path": "/api/add-original/",
+            "method": "POST",
+            "description": "Menambahkan dokumen asli baru ke dalam database lokal beserta ekstraksi embedding vektornya.",
+            "request": {
+                "contentType": "multipart/form-data",
+                "body": {
+                    "image": "File gambar dokumen asli"
+                }
+            },
+            "responses": {
+                "201": "Dokumen berhasil ditambahkan.",
+                "400": "Permintaan tidak valid.",
+                "409": "Dokumen duplikat (hash identik sudah ada)."
+            }
+        },
+        {
+            "path": "/api/results/{id}/",
+            "method": "GET",
+            "description": "Mendapatkan detail hasil pencarian berdasarkan ID termasuk analisis privasi dan hasil kemiripannya.",
+            "parameters": {
+                "id": "UUID dari SearchQuery"
+            },
+            "responses": {
+                "200": "Detail data hasil pencarian.",
+                "404": "Pencarian tidak ditemukan."
+            }
+        },
+        {
+            "path": "/api/originals/",
+            "method": "GET",
+            "description": "Menampilkan daftar seluruh dokumen asli yang ada di database lokal dengan format pagination.",
+            "parameters": {
+                "page": "Nomor halaman (opsional)"
+            },
+            "responses": {
+                "200": "Daftar dokumen asli (paginated)."
+            }
+        }
+    ],
+    "services": [
+        {
+            "name": "Privacy Filter Service",
+            "description": "Pendeteksian wajah (Vision API), dan pendeteksian pola Nama, Umur, Alamat, serta Nomor Telepon pada teks.",
+            "blockingRule": "Mencekal pencarian jika metrik deteksi melebihi 3 flag."
+        },
+        {
+            "name": "Embedding Service",
+            "description": "Menggunakan arsitektur PyTorch CNN (MobileNetV2) dengan GPU auto-detection (CUDA). Menghasilkan vektor 1280-dimensi yang L2-normalized ke unit length.",
+            "function": "extract_embedding(image_path)",
+            "device": "GPU (CUDA) jika tersedia, fallback ke CPU",
+            "preprocessing": "Resize 224x224, RGB, ImageNet normalization",
+            "postProcessing": "L2 normalization to unit length"
+        },
+        {
+            "name": "Similarity Service",
+            "description": "Perhitungan kemiripan (Cosine Similarity) dengan optimasi dot product untuk vektor L2-normalized. Brute-force local search dengan top-K filtering.",
+            "function": "find_most_similar(query_embedding, threshold, top_k, min_similarity)",
+            "defaultThreshold": 0.85,
+            "minimumSimilarity": 0.6,
+            "topK": 5
+        }
+    ],
+    "mlSystemPrompt": {
+        "projectName": "Sistem Deteksi Manipulasi Gambar (ImageGuard)",
+        "objective": "Membangun sistem machine learning berbasis PyTorch untuk ekstraksi embedding gambar dan perhitungan kemiripan menggunakan Cosine Similarity yang siap digunakan tanpa training ulang.",
+        "requirements": {
+            "framework": "PyTorch",
+            "model": {
+                "name": "MobileNetV2",
+                "pretrained": true,
+                "source": "ImageNet",
+                "mode": "Feature Extraction Only",
+                "outputDimension": 1280,
+                "removeClassificationHead": true,
+                "useGlobalAveragePooling": true
+            },
+            "device": "GPU (CUDA) auto-detect, fallback CPU",
+            "training": false,
+            "fineTuning": false
+        },
+        "preprocessingPipeline": {
+            "resize": "224x224",
+            "colorMode": "RGB",
+            "normalize": {
+                "mean": [
+                    0.485,
+                    0.456,
+                    0.406
+                ],
+                "std": [
+                    0.229,
+                    0.224,
+                    0.225
+                ]
+            },
+            "tensorType": "float32",
+            "noGradMode": true,
+            "consistentBetween": [
+                "add-original",
+                "search-query"
+            ]
+        },
+        "embeddingService": {
+            "fileLocation": "services/embedding_service.py",
+            "functionName": "extract_embedding",
+            "input": "image_path (string)",
+            "output": "list[float] (1280-dim float32, L2-normalized)",
+            "postProcessing": {
+                "l2Normalization": true,
+                "normalizeToUnitLength": true
+            },
+            "optimization": {
+                "singletonModelLoading": true,
+                "noGradInference": true,
+                "gpuAcceleration": true
+            }
+        },
+        "similarityService": {
+            "fileLocation": "services/similarity_service.py",
+            "metric": "Cosine Similarity",
+            "cosineFormula": "dot(A,B) / (||A|| * ||B||)",
+            "assumption": "Vectors already L2-normalized so dot product is sufficient",
+            "functions": [
+                "cosine_similarity(vec_a, vec_b)",
+                "find_most_similar(query_embedding, threshold, top_k, min_similarity)"
+            ],
+            "defaultThreshold": 0.85,
+            "minimumSimilarity": 0.6,
+            "topK": 5,
+            "sorting": "descending"
+        },
+        "databaseIntegration": {
+            "storageType": "PostgreSQL JSONField (Float Array)",
+            "embeddingStorage": "1280-dim float array",
+            "conversion": "Convert DB vector to numpy array before similarity computation",
+            "searchMethod": "Brute-force local search",
+            "scalabilityNote": "If dataset > 1000 use FAISS (optional)"
+        },
+        "privacyFilterIntegration": {
+            "externalAPI": "Google Cloud Vision API",
+            "detections": [
+                "Face Detection",
+                "OCR Text Detection"
+            ],
+            "regexDetection": [
+                "Name pattern (capitalized words)",
+                "Age pattern (number + tahun)",
+                "Address keywords (Jl, RT, RW, No, Kecamatan)",
+                "Phone pattern (+62 or 08xxxxxxxx)"
+            ],
+            "blockingRule": "If total_flags >= 3 return HTTP 403"
+        },
+        "performanceRequirements": {
+            "gpuRequired": false,
+            "gpuSupported": true,
+            "cpuOptimized": true,
+            "modelLoadOnce": true,
+            "errorHandling": true,
+            "timeoutHandlingVisionAPI": true
+        },
+        "finalCondition": "Sistem harus dapat langsung digunakan tanpa training tambahan, stabil di CPU/GPU, menghasilkan embedding konsisten, dan memiliki akurasi similarity yang cukup tinggi untuk manipulasi gambar ringan."
+    }
+}

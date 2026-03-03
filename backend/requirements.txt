@@ -1,0 +1,10 @@
+django>=4.2,<5.0
+djangorestframework>=3.14
+django-cors-headers>=4.3
+psycopg2-binary>=2.9
+Pillow>=10.0
+torch>=2.0
+torchvision>=0.15
+numpy>=1.24
+google-cloud-vision>=3.5
+python-dotenv>=1.0
