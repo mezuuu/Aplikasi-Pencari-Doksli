@@ -12,11 +12,11 @@ export default function Navbar() {
                 <div className="flex items-center justify-between h-16">
                     {/* Logo */}
                     <NavLink to="/" className="flex items-center gap-3 group">
-                        <div className="hidden sm:block">
-                            <h1 className="text-base font-bold gradient-text leading-tight">
+                        <div>
+                            <h1 className="text-sm sm:text-base font-bold gradient-text leading-tight">
                                 Pencari Doksli
                             </h1>
-                            <p className="text-[10px] text-slate-500 leading-tight">
+                            <p className="text-[10px] text-slate-500 leading-tight hidden sm:block">
                                 Deteksi Manipulasi Gambar
                             </p>
                         </div>
@@ -36,8 +36,7 @@ export default function Navbar() {
                                     }`
                                 }
                             >
-                                <span>{icon}</span>
-                                <span className="hidden sm:inline">{label}</span>
+                                <span>{label}</span>
                             </NavLink>
                         ))}
                     </div>

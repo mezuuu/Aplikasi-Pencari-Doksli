@@ -38,7 +38,6 @@ export default function PrivacyBadge({ privacyData }) {
                                 : 'bg-green-500/5 border border-green-500/10 text-green-400/60'
                                 }`}
                         >
-                            <span className="text-base">{icon}</span>
                             <div>
                                 <p>{label}</p>
                                 <p className={`text-[10px] ${detected ? 'text-red-400' : 'text-green-500/40'}`}>
