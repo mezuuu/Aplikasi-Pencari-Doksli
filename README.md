@@ -1,8 +1,9 @@
 # Sistem Deteksi Manipulasi Gambar
 
+![Screenshot Aplikasi](screenshot.png)
+
 Aplikasi berbasis web untuk mendeteksi manipulasi gambar dengan fitur filter privasi dan pencarian kemiripan gambar baik secara lokal maupun fallback ke web.
 
-![Screenshot Aplikasi](screenshot.png)
 
 ## Arsitektur & Teknologi
 
