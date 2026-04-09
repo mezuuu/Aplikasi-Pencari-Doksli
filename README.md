@@ -1,6 +1,8 @@
-# Sistem Deteksi Manipulasi Gambar (ImageGuard)
+# Sistem Deteksi Manipulasi Gambar
 
 Aplikasi berbasis web untuk mendeteksi manipulasi gambar dengan fitur filter privasi dan pencarian kemiripan gambar baik secara lokal maupun fallback ke web.
+
+![Screenshot Aplikasi](screenshot.png)
 
 ## Arsitektur & Teknologi
 
