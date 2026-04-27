@@ -273,7 +273,13 @@ export default function AdminPage() {
                 <>
                     <div className="space-y-3">
                         {documents.map((doc) => (
-                            <div key={doc.id} className="card flex items-center gap-4">
+                            <div key={doc.id}
+                                className="flex items-center gap-4 rounded-2xl p-4 border transition-colors duration-200 hover:border-indigo-500/40"
+                                style={{
+                                    background: 'rgba(15, 23, 42, 0.5)',
+                                    borderColor: 'rgba(99, 102, 241, 0.15)',
+                                }}
+                            >
                                 {/* Thumbnail */}
                                 <div className="shrink-0 w-16 h-16 rounded-lg bg-surface-800 overflow-hidden">
                                     {doc.image_url ? (
@@ -281,6 +287,7 @@ export default function AdminPage() {
                                             src={doc.image_url}
                                             alt="Dokumen"
                                             className="w-full h-full object-cover"
+                                            loading="lazy"
                                         />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center text-slate-600 text-xs">

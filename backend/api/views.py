@@ -145,7 +145,70 @@ def search_image(request):
                 similarity_score=match['score'],
             )
 
-        # 7. If no local matches, fallback to Google Vision
+        # 7. If no local matches → try sub-region search (screenshot handling)
+        crop_paths = []
+        if not local_matches:
+            try:
+                from services.cropping_service import generate_crop_regions, cleanup_crops
+                crop_paths = generate_crop_regions(filepath)
+
+                if crop_paths:
+                    logger.info(
+                        f"Full-image search found no matches. "
+                        f"Trying {len(crop_paths)} sub-region crops..."
+                    )
+
+                    best_crop_matches = []
+
+                    for crop_path in crop_paths:
+                        try:
+                            crop_embedding = extract_embedding(crop_path)
+                            crop_matches = find_most_similar(crop_embedding)
+
+                            for match in crop_matches:
+                                best_crop_matches.append(match)
+                        except Exception as e:
+                            logger.warning(f"Crop embedding/search failed for {crop_path}: {e}")
+                            continue
+
+                    if best_crop_matches:
+                        # Deduplicate by document id, keeping the highest score
+                        seen = {}
+                        for match in best_crop_matches:
+                            doc_id = str(match['document'].id)
+                            if doc_id not in seen or match['score'] > seen[doc_id]['score']:
+                                seen[doc_id] = match
+                        best_crop_matches = sorted(
+                            seen.values(), key=lambda x: x['score'], reverse=True
+                        )
+
+                        # Save sub-region matches (limit to top-K)
+                        top_k = getattr(settings, 'SIMILARITY_TOP_K', 5)
+                        for match in best_crop_matches[:top_k]:
+                            SearchResult.objects.create(
+                                search=search_query,
+                                source_type='local',
+                                matched_document=match['document'],
+                                similarity_score=match['score'],
+                            )
+                        local_matches = best_crop_matches[:top_k]
+                        logger.info(
+                            f"Sub-region search found {len(local_matches)} match(es). "
+                            f"Best score: {local_matches[0]['score']}"
+                        )
+
+            except Exception as e:
+                logger.error(f"Sub-region search error: {e}", exc_info=True)
+            finally:
+                # Always clean up temporary crop files
+                if crop_paths:
+                    try:
+                        from services.cropping_service import cleanup_crops
+                        cleanup_crops(crop_paths)
+                    except Exception:
+                        pass
+
+        # 8. If still no matches after sub-regions, fallback to Google Vision
         if not local_matches:
             try:
                 from services.vision_service import detect_web_matches
@@ -299,7 +362,7 @@ def list_originals(request):
     paginator = PageNumberPagination()
     paginator.page_size = 20
 
-    documents = OriginalDocument.objects.all()
+    documents = OriginalDocument.objects.defer('embedding_vector')
     page = paginator.paginate_queryset(documents, request)
 
     if page is not None:

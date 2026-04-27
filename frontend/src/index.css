@@ -31,40 +31,23 @@ body {
   overflow-x: hidden;
 }
 
-/* Background animated blobs */
-body::before,
-body::after {
+/* Background — static radial glows (zero GPU cost, same aesthetic) */
+body::before {
   content: '';
   position: fixed;
-  border-radius: 50%;
-  filter: blur(100px);
-  opacity: 0.15;
+  inset: 0;
   z-index: -1;
-  animation: float 8s ease-in-out infinite;
-}
-
-body::before {
-  width: 500px;
-  height: 500px;
-  background: #6366f1;
-  top: -100px;
-  right: -100px;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 600px 600px at top right, rgba(99, 102, 241, 0.12), transparent 70%),
+    radial-gradient(ellipse 500px 500px at bottom left, rgba(6, 182, 212, 0.10), transparent 70%);
 }
 
 body::after {
-  width: 400px;
-  height: 400px;
-  background: #06b6d4;
-  bottom: -100px;
-  left: -100px;
-  animation-delay: -4s;
+  display: none;
 }
 
-@keyframes float {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(30px, -30px) scale(1.05); }
-  66% { transform: translate(-20px, 20px) scale(0.95); }
-}
+/* Removed: @keyframes float — no longer needed */
 
 /* Scrollbar */
 ::-webkit-scrollbar {
@@ -142,17 +125,14 @@ body::after {
   }
 
   .card {
-    @apply rounded-2xl p-6 transition-all duration-300;
-    background: var(--glass-bg);
-    backdrop-filter: blur(16px);
+    @apply rounded-2xl p-6 transition-colors duration-200;
+    background: rgba(15, 23, 42, 0.7);
     border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
   }
 
   .card:hover {
     border-color: rgba(99, 102, 241, 0.4);
-    box-shadow: 0 8px 40px rgba(99, 102, 241, 0.15);
-    transform: translateY(-2px);
   }
 
   .input-field {

@@ -1,17 +1,92 @@
 """
 Google Cloud Vision API integration service.
 
-Provides face detection, text detection (OCR), and web detection
-using the Google Cloud Vision REST API.
+Provides face detection, text detection (OCR), and web detection.
+
+Authentication priority:
+1. Service Account JSON (via GOOGLE_APPLICATION_CREDENTIALS env var)
+2. Fallback to REST API with API Key (GOOGLE_CLOUD_API_KEY)
 """
 
 import base64
 import json
 import logging
+import os
 import requests
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+
+# ─── Try to initialize the official google-cloud-vision client ───
+_vision_client = None
+
+try:
+    from google.cloud import vision
+
+    creds_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '')
+    if creds_path and os.path.isfile(creds_path):
+        _vision_client = vision.ImageAnnotatorClient()
+        logger.info(
+            f"Google Cloud Vision client initialized with Service Account: "
+            f"{creds_path}"
+        )
+    else:
+        logger.warning(
+            "GOOGLE_APPLICATION_CREDENTIALS not set or file not found. "
+            "Will fall back to REST API with API key."
+        )
+except ImportError:
+    logger.warning(
+        "google-cloud-vision package not installed. "
+        "Will fall back to REST API with API key."
+    )
+except Exception as e:
+    logger.warning(f"Failed to init Vision client: {e}. Falling back to REST API.")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  Official Client methods (Service Account)
+# ══════════════════════════════════════════════════════════════════
+
+def _client_detect_faces(image_path):
+    """Detect faces using the official google-cloud-vision client."""
+    with open(image_path, 'rb') as f:
+        content = f.read()
+    image = vision.Image(content=content)
+    response = _vision_client.face_detection(image=image)
+    if response.error.message:
+        raise Exception(response.error.message)
+    return response.face_annotations
+
+
+def _client_detect_text(image_path):
+    """Detect text (OCR) using the official google-cloud-vision client."""
+    with open(image_path, 'rb') as f:
+        content = f.read()
+    image = vision.Image(content=content)
+    response = _vision_client.text_detection(image=image)
+    if response.error.message:
+        raise Exception(response.error.message)
+    texts = response.text_annotations
+    if texts:
+        return texts[0].description
+    return ''
+
+
+def _client_detect_web(image_path):
+    """Detect web matches using the official google-cloud-vision client."""
+    with open(image_path, 'rb') as f:
+        content = f.read()
+    image = vision.Image(content=content)
+    response = _vision_client.web_detection(image=image)
+    if response.error.message:
+        raise Exception(response.error.message)
+    return response.web_detection
+
+
+# ══════════════════════════════════════════════════════════════════
+#  REST API fallback methods (API Key)
+# ══════════════════════════════════════════════════════════════════
 
 VISION_API_BASE = "https://vision.googleapis.com/v1/images:annotate"
 
@@ -32,7 +107,7 @@ def _encode_image(image_path):
 
 def _call_vision_api(image_path, features):
     """
-    Call the Google Cloud Vision API with the specified features.
+    Call the Google Cloud Vision REST API with the specified features.
     Returns the API response or None if the API key is not configured.
     """
     api_key = _get_api_key()
@@ -71,11 +146,25 @@ def _call_vision_api(image_path, features):
         return None
 
 
+# ══════════════════════════════════════════════════════════════════
+#  Public API — auto-selects best available method
+# ══════════════════════════════════════════════════════════════════
+
 def detect_faces(image_path):
     """
     Detect faces in an image using Google Cloud Vision API.
     Returns list of face annotations or empty list.
     """
+    # Prefer official client (Service Account)
+    if _vision_client:
+        try:
+            annotations = _client_detect_faces(image_path)
+            logger.info(f"[ServiceAccount] Face detection: {len(annotations)} face(s)")
+            return annotations
+        except Exception as e:
+            logger.error(f"[ServiceAccount] Face detection failed: {e}")
+
+    # Fallback to REST API
     response = _call_vision_api(image_path, [
         {"type": "FACE_DETECTION", "maxResults": 10}
     ])
@@ -89,6 +178,16 @@ def detect_text(image_path):
     Detect text in an image using Google Cloud Vision OCR.
     Returns the full detected text string or empty string.
     """
+    # Prefer official client (Service Account)
+    if _vision_client:
+        try:
+            text = _client_detect_text(image_path)
+            logger.info(f"[ServiceAccount] Text detection: {len(text)} chars")
+            return text
+        except Exception as e:
+            logger.error(f"[ServiceAccount] Text detection failed: {e}")
+
+    # Fallback to REST API
     response = _call_vision_api(image_path, [
         {"type": "TEXT_DETECTION", "maxResults": 10}
     ])
@@ -104,10 +203,6 @@ def detect_web_matches(image_path):
     Detect web matches for an image using Google Cloud Vision Web Detection.
     Returns structured web detection data.
     """
-    response = _call_vision_api(image_path, [
-        {"type": "WEB_DETECTION", "maxResults": 10}
-    ])
-
     results = {
         'full_matching_images': [],
         'partial_matching_images': [],
@@ -115,6 +210,49 @@ def detect_web_matches(image_path):
         'visually_similar_images': [],
         'web_entities': [],
     }
+
+    # Prefer official client (Service Account)
+    if _vision_client:
+        try:
+            web = _client_detect_web(image_path)
+            if web:
+                for img in web.full_matching_images:
+                    results['full_matching_images'].append({
+                        'url': img.url,
+                        'score': img.score,
+                    })
+                for img in web.partial_matching_images:
+                    results['partial_matching_images'].append({
+                        'url': img.url,
+                        'score': img.score,
+                    })
+                for page in web.pages_with_matching_images:
+                    results['pages_with_matching_images'].append({
+                        'url': page.url,
+                        'page_title': page.page_title,
+                        'score': page.score,
+                    })
+                for img in web.visually_similar_images:
+                    results['visually_similar_images'].append({
+                        'url': img.url,
+                        'score': img.score,
+                    })
+                for entity in web.web_entities:
+                    results['web_entities'].append({
+                        'entity_id': entity.entity_id,
+                        'description': entity.description,
+                        'score': entity.score,
+                    })
+                total = sum(len(v) for v in results.values())
+                logger.info(f"[ServiceAccount] Web detection: {total} results")
+                return results
+        except Exception as e:
+            logger.error(f"[ServiceAccount] Web detection failed: {e}")
+
+    # Fallback to REST API
+    response = _call_vision_api(image_path, [
+        {"type": "WEB_DETECTION", "maxResults": 10}
+    ])
 
     if not response or 'webDetection' not in response:
         return results

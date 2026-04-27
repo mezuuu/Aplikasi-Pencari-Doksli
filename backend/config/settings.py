@@ -123,8 +123,21 @@ REST_FRAMEWORK = {
 # Google Cloud Vision API
 GOOGLE_CLOUD_API_KEY = os.getenv('GOOGLE_CLOUD_API_KEY', '')
 
+# Google Cloud Service Account credentials (JSON key file)
+GOOGLE_APPLICATION_CREDENTIALS = os.getenv(
+    'GOOGLE_APPLICATION_CREDENTIALS',
+    os.path.join(BASE_DIR, 'doksli-489605-3a86fa275159.json')
+)
+# Set env var so google-cloud-vision library auto-detects it
+os.environ.setdefault('GOOGLE_APPLICATION_CREDENTIALS', GOOGLE_APPLICATION_CREDENTIALS)
+
 # ML Settings
 SIMILARITY_THRESHOLD = 0.85   # Minimum score to count as a match
 SIMILARITY_MIN = 0.6          # Absolute floor — ignore anything below this
 SIMILARITY_TOP_K = 5          # Maximum results to return
 PRIVACY_FLAG_THRESHOLD = 3    # Block if >= 3 privacy flags detected
+
+# Sub-region cropping settings (for screenshot analysis)
+CROP_SCALES = [0.5, 0.7]      # Window sizes relative to image dimensions
+CROP_OVERLAP = 0.5             # 50% overlap between sliding windows
+CROP_MIN_SIZE = 100            # Minimum crop dimension in pixels

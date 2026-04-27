@@ -1,0 +1,23 @@
+# Environments
+.env
+backend/.env
+
+# Credentials
+backend/doksli-*.json
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+env/
+
+# Media
+backend/media/
+
+# Node
+node_modules/
+dist/
+build/
