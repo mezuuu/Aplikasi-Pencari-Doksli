@@ -1,4 +1,4 @@
-# 🔍 Doksli — Sistem Deteksi Manipulasi Gambar
+# Doksli — Sistem Deteksi Manipulasi Gambar
 
 ![Screenshot Aplikasi](screenshot.png)
 
@@ -6,7 +6,7 @@
 
 ---
 
-## 📑 Daftar Isi
+## Daftar Isi
 
 - [Arsitektur Sistem](#-arsitektur-sistem)
 - [Tech Stack](#-tech-stack)
@@ -22,7 +22,7 @@
 
 ---
 
-## 🏗 Arsitektur Sistem
+## Arsitektur Sistem
 
 Proyek ini dibangun menggunakan arsitektur **Client-Server (REST API)** dengan pemisahan yang jelas antara lapisan frontend dan backend.
 
@@ -55,7 +55,7 @@ Proyek ini dibangun menggunakan arsitektur **Client-Server (REST API)** dengan p
 
 ---
 
-## 🛠 Tech Stack
+## Tech Stack
 
 ### Frontend
 | Teknologi | Versi | Fungsi |
@@ -91,9 +91,9 @@ Proyek ini dibangun menggunakan arsitektur **Client-Server (REST API)** dengan p
 
 ---
 
-## ✨ Fitur Utama
+## Fitur Utama
 
-### 1. 🔎 Pencarian Kemiripan Gambar (Image Similarity Search)
+### 1. Pencarian Kemiripan Gambar (Image Similarity Search)
 
 Sistem menggunakan arsitektur **CNN MobileNetV2** (PyTorch) yang dikonfigurasi khusus tanpa _classifier_ akhir untuk menghasilkan _feature embedding_ dari setiap gambar.
 
@@ -109,7 +109,7 @@ Sistem menggunakan arsitektur **CNN MobileNetV2** (PyTorch) yang dikonfigurasi k
 - _Singleton model loading_ (model diload sekali, digunakan berulang)
 - Deduplikasi file menggunakan SHA-256 hash
 
-### 2. 🛡️ Filter Privasi Otomatis (Privacy Analysis)
+### 2. Filter Privasi Otomatis (Privacy Analysis)
 
 Sebelum gambar diproses untuk pengecekan kemiripan, backend menganalisis konten untuk melindungi data pribadi. Sistem memberikan status **Blocked** jika terdeteksi ≥ 3 dari 5 kategori berikut:
 
@@ -126,11 +126,11 @@ Sebelum gambar diproses untuk pengecekan kemiripan, backend menganalisis konten 
 - **Histogram Equalization** otomatis untuk menangani gambar berkontras rendah
 - **Konteks-Cerdas (Context-Aware):** Deteksi _header_ KTP (`PROVINSI...NIK`) untuk inferensi logis
 
-### 3. ⚖️ Perbandingan Visual Side-by-Side
+### 3. Perbandingan Visual Side-by-Side
 
 Ketika sistem menemukan lebih dari satu kecocokan, pengguna dapat mengklik hasil untuk membuka **modal perbandingan** yang menampilkan gambar _query_ dan dokumen asli (_Doksli_) secara berdampingan, lengkap dengan skor kecocokan.
 
-### 4. 👨‍💼 Admin Dashboard
+### 4. Admin Dashboard
 
 Panel admin (`/admin`) dilengkapi dengan:
 - Autentikasi login admin
@@ -138,7 +138,7 @@ Panel admin (`/admin`) dilengkapi dengan:
 - Hapus dokumen dari database
 - Daftar seluruh dokumen yang tersimpan
 
-### 5. 🎨 UI/UX Premium
+### 5. UI/UX Premium
 
 - **Dark Glassmorphism Theme** dengan efek _backdrop-blur_ dan _gradient_
 - **Particle Background** interaktif dengan efek:
@@ -148,7 +148,7 @@ Panel admin (`/admin`) dilengkapi dengan:
 - **Dark/Light Mode Toggle** dengan persistensi `localStorage`
 - **Responsive Design** untuk desktop dan mobile
 
-### 6. 📦 Bulk Import CLI
+### 6. Bulk Import CLI
 
 Management command `import_doksli` untuk mengimpor banyak gambar sekaligus dari direktori ke database, lengkap dengan:
 - Ekstraksi embedding otomatis
@@ -157,7 +157,7 @@ Management command `import_doksli` untuk mengimpor banyak gambar sekaligus dari 
 
 ---
 
-## 📁 Struktur Proyek
+## Struktur Proyek
 
 ```
 Capstone Project/
@@ -228,7 +228,7 @@ Capstone Project/
 
 ---
 
-## 🗄 Struktur Database
+## Struktur Database
 
 Sistem menggunakan **PostgreSQL** dengan 5 entitas utama yang saling terhubung. Seluruh tabel menggunakan **UUID** sebagai Primary Key.
 
@@ -299,7 +299,7 @@ erDiagram
 
 ---
 
-## ⚙ Service Layer (Backend)
+## Service Layer (Backend)
 
 ### 1. `privacy_service.py` — Filter Privasi
 Modul inti yang menganalisis gambar untuk konten sensitif sebelum pemrosesan utama.
@@ -368,7 +368,7 @@ Menyediakan fungsi cropping dan resize gambar sebelum diproses oleh model ML.
 
 ---
 
-## 🖥 Komponen Frontend
+## Komponen Frontend
 
 ### Pages
 
@@ -393,7 +393,7 @@ Menyediakan fungsi cropping dan resize gambar sebelum diproses oleh model ML.
 
 ---
 
-## 🔌 API Endpoints
+## API Endpoints
 
 ### Public Endpoints
 
@@ -413,7 +413,7 @@ Menyediakan fungsi cropping dan resize gambar sebelum diproses oleh model ML.
 
 ---
 
-## 🚀 Instalasi & Menjalankan Proyek
+## Instalasi & Menjalankan Proyek
 
 ### Prasyarat
 
@@ -480,7 +480,7 @@ npm run dev
 
 ---
 
-## 🔐 Environment Variables
+## Environment Variables
 
 Buat file `.env` di direktori `backend/` dengan konfigurasi berikut:
 
@@ -502,7 +502,7 @@ PRIVACY_FLAG_THRESHOLD=3
 
 ---
 
-## 🛠 Management Commands
+## Management Commands
 
 ### Bulk Import Dokumen Asli
 
@@ -527,7 +527,7 @@ Total  : 215
 
 ---
 
-## 📄 Lisensi
+## Lisensi
 
 Proyek ini dikembangkan sebagai bagian dari tugas **Capstone Project**.
 
