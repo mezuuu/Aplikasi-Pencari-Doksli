@@ -63,7 +63,7 @@ export default function SearchPage() {
                 <h1 className="text-3xl sm:text-4xl font-extrabold">
                     <span className="gradient-text">Analisis Gambar</span>
                 </h1>
-                <p className="text-slate-400 text-sm sm:text-base max-w-2xl mx-auto">
+                <p className="text-navy/70 text-sm sm:text-base max-w-2xl mx-auto">
                     Upload gambar untuk menganalisis keaslian dan mencari kemiripan
                     dengan dokumen yang tersimpan. Sistem akan memeriksa privasi
                     sebelum melakukan pencarian.
@@ -112,16 +112,16 @@ export default function SearchPage() {
                     {/* Side-by-Side Image Comparison */}
                     {!isBlocked && bestLocalMatch && queryPreviewUrl && (
                         <div className="card">
-                            <h2 className="text-lg font-semibold text-slate-200 mb-4 text-center">
+                            <h2 className="text-lg font-semibold text-navy mb-4 text-center">
                                 Perbandingan Gambar
                             </h2>
                             <div className="flex items-stretch gap-0 rounded-xl overflow-hidden">
                                 {/* Left — Query Image */}
                                 <div className="flex-1 flex flex-col items-center">
-                                    <p className="text-xs text-slate-400 font-medium mb-2 uppercase tracking-wider">
+                                    <p className="text-xs text-navy/60 font-medium mb-2 uppercase tracking-wider">
                                         Gambar yang Dianalisis
                                     </p>
-                                    <div className="w-full aspect-square bg-surface-800 rounded-xl overflow-hidden flex items-center justify-center">
+                                    <div className="w-full aspect-square bg-black/5 dark:bg-white/5 rounded-xl overflow-hidden flex items-center justify-center">
                                         <img
                                             src={queryPreviewUrl}
                                             alt="Gambar yang dianalisis"
@@ -131,14 +131,14 @@ export default function SearchPage() {
                                 </div>
 
                                 {/* Separator */}
-                                <div className="w-px bg-slate-600 mx-4 self-stretch"></div>
+                                <div className="w-px bg-navy/20 mx-4 self-stretch"></div>
 
                                 {/* Right — Matched Document Image */}
                                 <div className="flex-1 flex flex-col items-center">
-                                    <p className="text-xs text-slate-400 font-medium mb-2 uppercase tracking-wider">
+                                    <p className="text-xs text-navy/60 font-medium mb-2 uppercase tracking-wider">
                                         Gambar Doksli
                                     </p>
-                                    <div className="w-full aspect-square bg-surface-800 rounded-xl overflow-hidden flex items-center justify-center">
+                                    <div className="w-full aspect-square bg-black/5 dark:bg-white/5 rounded-xl overflow-hidden flex items-center justify-center">
                                         <img
                                             src={bestLocalMatch.matched_document.image_url}
                                             alt="Dokumen asli yang cocok"
@@ -154,10 +154,10 @@ export default function SearchPage() {
                     {!isBlocked && results.length > 0 && (
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
-                                <h2 className="text-lg font-semibold text-slate-200">
+                                <h2 className="text-lg font-semibold text-navy">
                                     Hasil Pencarian
                                 </h2>
-                                <span className="text-xs text-slate-500">
+                                <span className="text-xs text-navy/60">
                                     {results.length} hasil ditemukan
                                 </span>
                             </div>
@@ -172,8 +172,8 @@ export default function SearchPage() {
                     {/* No results */}
                     {!isBlocked && results.length === 0 && (
                         <div className="card text-center py-8">
-                            <p className="text-slate-300 font-medium">Tidak ditemukan kecocokan</p>
-                            <p className="text-xs text-slate-500 mt-1">
+                            <p className="text-navy font-medium">Tidak ditemukan kecocokan</p>
+                            <p className="text-xs text-navy/60 mt-1">
                                 Gambar ini tidak ditemukan di database lokal maupun web.
                             </p>
                         </div>
@@ -215,8 +215,8 @@ export default function SearchPage() {
                     ].map((feature, i) => (
                         <div key={i} className="card text-center">
                             <div className="text-3xl mb-3">{feature.icon}</div>
-                            <h3 className="text-sm font-semibold text-slate-200 mb-1">{feature.title}</h3>
-                            <p className="text-xs text-slate-500">{feature.desc}</p>
+                            <h3 className="text-sm font-semibold text-navy mb-1">{feature.title}</h3>
+                            <p className="text-xs text-navy/60">{feature.desc}</p>
                         </div>
                     ))}
                 </div>

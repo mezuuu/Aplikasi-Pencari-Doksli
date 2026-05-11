@@ -52,7 +52,7 @@ export default function ImageUpload({ onUpload, loading = false, label = 'Upload
 
     return (
         <div className="w-full">
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-navy/80 mb-2">
                 {label}
             </label>
 
@@ -60,8 +60,8 @@ export default function ImageUpload({ onUpload, loading = false, label = 'Upload
                 className={`relative rounded-2xl border-2 border-dashed transition-all duration-300 cursor-pointer overflow-hidden ${dragActive
                     ? 'border-primary-400 bg-primary-500/10 scale-[1.02]'
                     : preview
-                        ? 'border-primary-500/30 bg-surface-800/50'
-                        : 'border-slate-600 hover:border-primary-500/50 bg-surface-800/30 hover:bg-primary-500/5'
+                        ? 'border-primary-500/30 bg-black/5 dark:bg-white/5/50'
+                        : 'border-glass hover:border-primary-500/50 bg-black/5 dark:bg-white/5/30 hover:bg-primary-500/5'
                     } ${loading ? 'pointer-events-none opacity-60' : ''}`}
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
@@ -95,7 +95,7 @@ export default function ImageUpload({ onUpload, loading = false, label = 'Upload
                                 </button>
                             </div>
                         </div>
-                        <p className="text-xs text-slate-400 text-center mt-3 truncate">
+                        <p className="text-xs text-navy/60 text-center mt-3 truncate">
                             {fileName}
                         </p>
                     </div>
@@ -104,10 +104,10 @@ export default function ImageUpload({ onUpload, loading = false, label = 'Upload
                         <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4 text-3xl"
                             style={{ background: 'var(--gradient-card)' }}>
                         </div>
-                        <p className="text-base font-medium text-slate-300 mb-1">
+                        <p className="text-base font-medium text-navy/80 mb-1">
                             {dragActive ? 'Lepas gambar di sini...' : 'Seret & lepas gambar'}
                         </p>
-                        <p className="text-sm text-slate-500">
+                        <p className="text-sm text-navy/50">
                             atau <span className="text-primary-400 underline">pilih file</span>
                         </p>
                         <p className="text-xs text-slate-600 mt-2">
@@ -118,7 +118,7 @@ export default function ImageUpload({ onUpload, loading = false, label = 'Upload
 
                 {/* Loading overlay */}
                 {loading && (
-                    <div className="absolute inset-0 bg-surface-900/80 backdrop-blur-sm flex flex-col items-center justify-center rounded-2xl">
+                    <div className="absolute inset-0 bg-black/10 dark:bg-white/10/80 backdrop-blur-sm flex flex-col items-center justify-center rounded-2xl">
                         <div className="spinner mb-3"></div>
                         <p className="text-sm text-primary-300 font-medium animate-pulse">
                             Menganalisis gambar...

@@ -25,7 +25,7 @@ export default function DocumentCard({ document }) {
             </div>
 
             {/* Thumbnail */}
-            <div className="rounded-xl overflow-hidden bg-surface-800 mb-3 aspect-video flex items-center justify-center">
+            <div className="rounded-xl overflow-hidden bg-black/5 dark:bg-white/5 mb-3 aspect-video flex items-center justify-center">
                 {document.image_path ? (
                     <img
                         src={`/media/${document.image_path.split('/media/').pop() || ''}`}
@@ -43,7 +43,7 @@ export default function DocumentCard({ document }) {
             </div>
 
             {/* Meta info */}
-            <div className="flex items-center justify-between text-xs text-slate-500">
+            <div className="flex items-center justify-between text-xs text-navy/50">
                 <span className="flex items-center gap-1">
                     {dateStr}
                 </span>

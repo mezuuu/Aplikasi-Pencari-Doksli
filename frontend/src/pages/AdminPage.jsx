@@ -125,22 +125,22 @@ export default function AdminPage() {
                         <h1 className="text-2xl font-extrabold">
                             <span className="gradient-text">Admin Login</span>
                         </h1>
-                        <p className="text-slate-400 text-sm mt-2">
+                        <p className="text-navy/60 text-sm mt-2">
                             Masuk untuk mengelola database dokumen asli.
                         </p>
                     </div>
 
                     <form onSubmit={handleLogin} className="space-y-4">
                         <div>
-                            <label className="block text-xs text-slate-400 font-medium mb-1.5 uppercase tracking-wider">
+                            <label className="block text-xs text-navy/60 font-medium mb-1.5 uppercase tracking-wider">
                                 Username
                             </label>
                             <input
                                 type="text"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
-                                className="w-full px-4 py-3 rounded-xl bg-surface-800 border border-surface-600
-                                           text-slate-200 placeholder-slate-500 text-sm
+                                className="w-full px-4 py-3 rounded-xl bg-black/5 dark:bg-white/5 border border-surface-600
+                                           text-navy placeholder-slate-500 text-sm
                                            focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/50
                                            transition-colors"
                                 placeholder="Masukkan username"
@@ -150,15 +150,15 @@ export default function AdminPage() {
                         </div>
 
                         <div>
-                            <label className="block text-xs text-slate-400 font-medium mb-1.5 uppercase tracking-wider">
+                            <label className="block text-xs text-navy/60 font-medium mb-1.5 uppercase tracking-wider">
                                 Password
                             </label>
                             <input
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full px-4 py-3 rounded-xl bg-surface-800 border border-surface-600
-                                           text-slate-200 placeholder-slate-500 text-sm
+                                className="w-full px-4 py-3 rounded-xl bg-black/5 dark:bg-white/5 border border-surface-600
+                                           text-navy placeholder-slate-500 text-sm
                                            focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/50
                                            transition-colors"
                                 placeholder="Masukkan password"
@@ -201,7 +201,7 @@ export default function AdminPage() {
                     <h1 className="text-2xl sm:text-3xl font-extrabold">
                         <span className="gradient-text">Admin Panel</span>
                     </h1>
-                    <p className="text-slate-400 text-sm mt-1">
+                    <p className="text-navy/60 text-sm mt-1">
                         Kelola database dokumen asli
                     </p>
                 </div>
@@ -212,7 +212,7 @@ export default function AdminPage() {
 
             {/* Upload Section */}
             <div className="card">
-                <h2 className="text-lg font-semibold text-slate-200 mb-4">Tambah Dokumen</h2>
+                <h2 className="text-lg font-semibold text-navy mb-4">Tambah Dokumen</h2>
                 <div className="space-y-4">
                     <ImageUpload
                         onUpload={handleFileSelect}
@@ -258,7 +258,7 @@ export default function AdminPage() {
             {/* Document Count */}
             <div className="flex items-center gap-4">
                 <div className="flex-1 h-px bg-gradient-to-r from-transparent via-primary-500/30 to-transparent"></div>
-                <span className="text-xs text-slate-500 font-medium">
+                <span className="text-xs text-navy/50 font-medium">
                     {pagination.count} dokumen tersimpan
                 </span>
                 <div className="flex-1 h-px bg-gradient-to-r from-transparent via-primary-500/30 to-transparent"></div>
@@ -281,7 +281,7 @@ export default function AdminPage() {
                                 }}
                             >
                                 {/* Thumbnail */}
-                                <div className="shrink-0 w-16 h-16 rounded-lg bg-surface-800 overflow-hidden">
+                                <div className="shrink-0 w-16 h-16 rounded-lg bg-black/5 dark:bg-white/5 overflow-hidden">
                                     {doc.image_url ? (
                                         <img
                                             src={doc.image_url}
@@ -298,10 +298,10 @@ export default function AdminPage() {
 
                                 {/* Info */}
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-slate-200 font-mono truncate">
+                                    <p className="text-sm font-medium text-navy font-mono truncate">
                                         {doc.file_hash?.slice(0, 24)}...
                                     </p>
-                                    <p className="text-xs text-slate-500 mt-0.5">
+                                    <p className="text-xs text-navy/50 mt-0.5">
                                         ID: {doc.id?.slice(0, 8)}... | {new Date(doc.created_at).toLocaleDateString('id-ID')}
                                     </p>
                                 </div>
@@ -335,7 +335,7 @@ export default function AdminPage() {
                             >
                                 Sebelumnya
                             </button>
-                            <span className="flex items-center text-xs text-slate-500">
+                            <span className="flex items-center text-xs text-navy/50">
                                 Halaman {page}
                             </span>
                             <button
@@ -350,8 +350,8 @@ export default function AdminPage() {
                 </>
             ) : (
                 <div className="card text-center py-12">
-                    <p className="text-slate-300 font-medium mb-1">Belum ada dokumen</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-navy/80 font-medium mb-1">Belum ada dokumen</p>
+                    <p className="text-xs text-navy/50">
                         Upload dokumen asli pertama melalui form di atas.
                     </p>
                 </div>

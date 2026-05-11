@@ -1,4 +1,4 @@
-export default function ResultCard({ result }) {
+export default function ResultCard({ result, onClick }) {
     if (!result) return null
 
     const isLocal = result.source_type === 'local'
@@ -18,7 +18,10 @@ export default function ResultCard({ result }) {
     }
 
     return (
-        <div className="card group">
+        <div 
+            onClick={isLocal ? onClick : undefined}
+            className={`card group ${isLocal ? 'cursor-pointer hover:border-primary-400 hover:shadow-[0_0_15px_rgba(59,130,246,0.2)]' : ''}`}
+        >
             <div className="flex items-start gap-4">
                 {/* Source badge */}
                 <div className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${isLocal
@@ -32,10 +35,10 @@ export default function ResultCard({ result }) {
                 <div className="flex-1 min-w-0">
                     {isLocal && result.matched_document ? (
                         <div>
-                            <p className="text-sm font-medium text-slate-200 truncate">
+                            <p className="text-sm font-medium text-navy truncate">
                                 Dokumen: {result.matched_document.file_hash?.slice(0, 16)}...
                             </p>
-                            <p className="text-xs text-slate-500 mt-1">
+                            <p className="text-xs text-navy/50 mt-1">
                                 ID: {result.matched_document.id?.slice(0, 8)}...
                             </p>
                         </div>
@@ -50,7 +53,7 @@ export default function ResultCard({ result }) {
                             >
                                 {result.external_url}
                             </a>
-                            <p className="text-xs text-slate-500 mt-1">Sumber eksternal</p>
+                            <p className="text-xs text-navy/50 mt-1">Sumber eksternal</p>
                         </div>
                     )}
                 </div>
@@ -60,12 +63,12 @@ export default function ResultCard({ result }) {
                     <p className={`text-lg font-bold ${getScoreColor(result.similarity_score)}`}>
                         {scorePercent}%
                     </p>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-wide">Similarity</p>
+                    <p className="text-[10px] text-navy/50 uppercase tracking-wide">Similarity</p>
                 </div>
             </div>
 
             {/* Similarity bar */}
-            <div className="mt-3 h-1.5 rounded-full bg-surface-800 overflow-hidden">
+            <div className="mt-3 h-1.5 rounded-full bg-black/5 dark:bg-white/5 overflow-hidden">
                 <div
                     className="h-full rounded-full transition-all duration-700 ease-out"
                     style={{

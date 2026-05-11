@@ -3,7 +3,7 @@ const flagLabels = {
     name_detected: { label: 'Nama' },
     age_detected: { label: 'Umur' },
     address_detected: { label: 'Alamat' },
-    phone_detected: { label: 'Telepon' },
+    phone_detected: { label: 'No. Identitas' },
 }
 
 export default function PrivacyBadge({ privacyData }) {
@@ -16,7 +16,7 @@ export default function PrivacyBadge({ privacyData }) {
         <div className="card">
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-navy/80 flex items-center gap-2">
                     🔒 Analisis Privasi
                 </h3>
                 <span className={isBlocked ? 'badge-danger' : 'badge-safe'}>
