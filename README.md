@@ -1,8 +1,8 @@
-# Doksli — Sistem Deteksi Manipulasi Gambar
+# Aplikasi Pencari Doksli — Sistem Deteksi Manipulasi Gambar
 
 ![Screenshot Aplikasi](screenshot.png)
 
-**Doksli** (Dokumen Asli) adalah aplikasi berbasis web untuk mendeteksi manipulasi gambar dengan fitur filter privasi otomatis dan pencarian kemiripan gambar menggunakan teknologi _Machine Learning_. Sistem ini mampu membandingkan gambar yang diunggah pengguna terhadap database dokumen asli secara lokal maupun melalui pencarian web menggunakan Google Cloud Vision API.
+**Aplikasi Pencari Doksli** (Dokumen Asli) adalah aplikasi berbasis web untuk mendeteksi manipulasi gambar dengan fitur filter privasi otomatis dan pencarian kemiripan gambar menggunakan teknologi _Machine Learning_. Sistem ini mampu membandingkan gambar yang diunggah pengguna terhadap database dokumen asli secara lokal maupun melalui pencarian web menggunakan Google Cloud Vision API.
 
 ---
 
