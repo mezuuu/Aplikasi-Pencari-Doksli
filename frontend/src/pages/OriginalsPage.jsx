@@ -25,7 +25,7 @@ export default function OriginalsPage() {
                 <h1 className="text-3xl sm:text-4xl font-extrabold">
                     <span className="gradient-text">Dokumen Asli</span>
                 </h1>
-                <p className="text-navy/60 text-sm max-w-xl mx-auto">
+                <p className="text-slate-400 text-sm max-w-xl mx-auto">
                     Koleksi dokumen asli yang tersimpan di database untuk perbandingan kemiripan.
                     Pengelolaan dokumen dilakukan melalui Admin Panel.
                 </p>
@@ -34,11 +34,11 @@ export default function OriginalsPage() {
             {/* Info Card */}
             <div className="max-w-xl mx-auto">
                 <div className="card text-center py-8">
-                    <div className="text-4xl mb-3">📁</div>
-                    <p className="text-lg font-semibold text-navy mb-1">
+                    <div className="text-4xl mb-3"></div>
+                    <p className="text-lg font-semibold text-slate-200 mb-1">
                         {docCount} dokumen tersimpan
                     </p>
-                    <p className="text-xs text-navy/50">
+                    <p className="text-xs text-slate-500">
                         Untuk menambah atau menghapus dokumen, silakan masuk melalui Admin Panel.
                     </p>
                 </div>
@@ -47,7 +47,7 @@ export default function OriginalsPage() {
             {/* Document Count Divider */}
             <div className="flex items-center gap-4">
                 <div className="flex-1 h-px bg-gradient-to-r from-transparent via-primary-500/30 to-transparent"></div>
-                <span className="text-xs text-navy/50 font-medium">
+                <span className="text-xs text-slate-500 font-medium">
                     Database Dokumen Asli
                 </span>
                 <div className="flex-1 h-px bg-gradient-to-r from-transparent via-primary-500/30 to-transparent"></div>
