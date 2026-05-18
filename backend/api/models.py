@@ -56,6 +56,7 @@ class SearchQuery(models.Model):
     SOURCE_CHOICES = [
         ('local', 'Local'),
         ('google', 'Google'),
+        ('bing', 'Bing'),
         ('both', 'Both'),
     ]
 
@@ -99,6 +100,7 @@ class SearchResult(models.Model):
     SOURCE_CHOICES = [
         ('local', 'Local'),
         ('google', 'Google'),
+        ('bing', 'Bing'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -114,6 +116,10 @@ class SearchResult(models.Model):
         null=True,
         blank=True,
         related_name='matched_results'
+    )
+    matched_image_path = models.TextField(
+        null=True, blank=True,
+        help_text="Path to a locally-stored candidate image (for web search results)"
     )
     external_url = models.TextField(null=True, blank=True, help_text="URL for Google web matches")
     similarity_score = models.FloatField(default=0.0)

@@ -74,13 +74,35 @@ class PrivacyAnalysisSerializer(serializers.ModelSerializer):
 
 class SearchResultSerializer(serializers.ModelSerializer):
     matched_document = OriginalDocumentListSerializer(read_only=True)
+    matched_image_url = serializers.SerializerMethodField()
 
     class Meta:
         model = SearchResult
         fields = [
             'id', 'source_type', 'matched_document',
-            'external_url', 'similarity_score', 'created_at',
+            'matched_image_url', 'external_url',
+            'similarity_score', 'created_at',
         ]
+
+    def get_matched_image_url(self, obj):
+        """
+        Return a displayable image URL for any result type:
+        - Local results: use matched_document.image_path
+        - Web results: use local matched_image_path OR external_url (direct link)
+        """
+        # Priority 1: local matched document
+        if obj.matched_document and obj.matched_document.image_path:
+            return _image_path_to_url(obj.matched_document.image_path)
+        
+        # Priority 2: web candidate stored locally
+        if obj.matched_image_path:
+            return _image_path_to_url(obj.matched_image_path)
+        
+        # Priority 3: external direct URL (for non-permanent storage)
+        if obj.external_url:
+            return obj.external_url
+            
+        return None
 
 
 class SearchQuerySerializer(serializers.ModelSerializer):

@@ -8,7 +8,10 @@ import { searchImage } from '../api/client'
 export default function SearchPage() {
     const navigate = useNavigate()
     const [loading, setLoading] = useState(false)
-    const [result, setResult] = useState(null)
+    const [result, setResult] = useState(() => {
+        const saved = sessionStorage.getItem('lastSearchResult')
+        return saved ? JSON.parse(saved) : null
+    })
     const [error, setError] = useState(null)
     const [selectedFile, setSelectedFile] = useState(null)
 
@@ -21,6 +24,7 @@ export default function SearchPage() {
     const handleFileSelect = (file) => {
         setSelectedFile(file)
         setResult(null)
+        sessionStorage.removeItem('lastSearchResult')
         setError(null)
     }
 
@@ -34,11 +38,13 @@ export default function SearchPage() {
         try {
             const data = await searchImage(selectedFile)
             setResult(data)
+            sessionStorage.setItem('lastSearchResult', JSON.stringify(data))
         } catch (err) {
             const errData = err.response?.data
             if (err.response?.status === 403 && errData?.status === 'blocked') {
                 // Blocked by privacy filter — still show the result for UI
                 setResult(errData)
+                sessionStorage.setItem('lastSearchResult', JSON.stringify(errData))
             } else {
                 setError(errData?.error || 'Terjadi kesalahan saat menganalisis gambar.')
             }
@@ -51,10 +57,13 @@ export default function SearchPage() {
     const isBlocked = result?.status === 'blocked'
     const results = searchData?.results || []
 
-    // Find the best local match for side-by-side comparison
-    const bestLocalMatch = results.find(
-        (r) => r.source_type === 'local' && r.matched_document?.image_url
+    // Find the best match with an image (local or web) for side-by-side comparison
+    const bestMatch = results.find(
+        (r) => r.matched_image_url
     )
+
+    // Fallback for preview URL if returning from details page (no selectedFile)
+    const displayPreviewUrl = queryPreviewUrl || searchData?.query_image_url
 
     return (
         <div className="space-y-8">
@@ -110,20 +119,20 @@ export default function SearchPage() {
                     <PrivacyBadge privacyData={searchData.privacy_analysis} />
 
                     {/* Side-by-Side Image Comparison */}
-                    {!isBlocked && bestLocalMatch && queryPreviewUrl && (
+                    {!isBlocked && bestMatch && displayPreviewUrl && (
                         <div className="card">
                             <h2 className="text-lg font-semibold text-navy mb-4 text-center">
                                 Perbandingan Gambar
                             </h2>
                             <div className="flex items-stretch gap-0 rounded-xl overflow-hidden">
-                                {/* Left — Query Image */}
+                                {/* Left -- Query Image */}
                                 <div className="flex-1 flex flex-col items-center">
                                     <p className="text-xs text-navy/60 font-medium mb-2 uppercase tracking-wider">
                                         Gambar yang Dianalisis
                                     </p>
                                     <div className="w-full aspect-square bg-black/5 dark:bg-white/5 rounded-xl overflow-hidden flex items-center justify-center">
                                         <img
-                                            src={queryPreviewUrl}
+                                            src={displayPreviewUrl}
                                             alt="Gambar yang dianalisis"
                                             className="w-full h-full object-contain"
                                         />
@@ -133,18 +142,21 @@ export default function SearchPage() {
                                 {/* Separator */}
                                 <div className="w-px bg-navy/20 mx-4 self-stretch"></div>
 
-                                {/* Right — Matched Document Image */}
+                                {/* Right -- Matched Document Image */}
                                 <div className="flex-1 flex flex-col items-center">
                                     <p className="text-xs text-navy/60 font-medium mb-2 uppercase tracking-wider">
-                                        Gambar Doksli
+                                        {bestMatch.source_type === 'local' ? 'Gambar Doksli' : 'Kandidat Doksli (Web)'}
                                     </p>
                                     <div className="w-full aspect-square bg-black/5 dark:bg-white/5 rounded-xl overflow-hidden flex items-center justify-center">
                                         <img
-                                            src={bestLocalMatch.matched_document.image_url}
+                                            src={bestMatch.matched_image_url}
                                             alt="Dokumen asli yang cocok"
                                             className="w-full h-full object-contain"
                                         />
                                     </div>
+                                    <p className="text-xs text-navy/50 mt-2 font-medium">
+                                        {(bestMatch.similarity_score * 100).toFixed(1)}% Kecocokan
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -162,8 +174,12 @@ export default function SearchPage() {
                                 </span>
                             </div>
                             <div className="space-y-3">
-                                {results.map((r) => (
-                                    <ResultCard key={r.id} result={r} />
+                                {results.slice(0, 3).map((r) => (
+                                    <ResultCard 
+                                        key={r.id} 
+                                        result={r} 
+                                        onClick={() => navigate(`/results/${searchData.id}`)}
+                                    />
                                 ))}
                             </div>
                         </div>

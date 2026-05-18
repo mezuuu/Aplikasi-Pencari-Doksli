@@ -4,6 +4,10 @@ export default function ResultCard({ result, onClick }) {
     const isLocal = result.source_type === 'local'
     const scorePercent = (result.similarity_score * 100).toFixed(1)
 
+    // Any result with a displayable image can be clicked for comparison
+    const hasImage = !!(result.matched_image_url || result.matched_document?.image_url)
+    const isClickable = hasImage && onClick
+
     // Color based on similarity score
     const getScoreColor = (score) => {
         if (score >= 0.9) return 'text-red-400'
@@ -17,18 +21,36 @@ export default function ResultCard({ result, onClick }) {
         return 'bg-green-500/10 border-green-500/30'
     }
 
+    // Source label
+    const sourceLabel = isLocal ? 'Lokal' : result.source_type === 'bing' ? 'Bing' : 'Google'
+
+    // Image URL to display (works for both local and web results)
+    const imageUrl = result.matched_image_url || result.matched_document?.image_url
+
     return (
         <div 
-            onClick={isLocal ? onClick : undefined}
-            className={`card group ${isLocal ? 'cursor-pointer hover:border-primary-400 hover:shadow-[0_0_15px_rgba(59,130,246,0.2)]' : ''}`}
+            onClick={isClickable ? onClick : undefined}
+            className={`card group ${isClickable ? 'cursor-pointer hover:border-primary-400 hover:shadow-[0_0_15px_rgba(59,130,246,0.2)]' : ''}`}
         >
             <div className="flex items-start gap-4">
+                {/* Thumbnail */}
+                {imageUrl && (
+                    <div className="shrink-0 w-16 h-16 rounded-lg bg-black/5 dark:bg-white/5 overflow-hidden border border-white/10">
+                        <img
+                            src={imageUrl}
+                            alt="Hasil pencarian"
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                        />
+                    </div>
+                )}
+
                 {/* Source badge */}
                 <div className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${isLocal
                     ? 'bg-primary-500/15 text-primary-300 border border-primary-500/30'
                     : 'bg-accent-500/15 text-accent-300 border border-accent-500/30'
                     }`}>
-                    {isLocal ? 'Lokal' : 'Google'}
+                    {sourceLabel}
                 </div>
 
                 {/* Content */}
@@ -42,6 +64,15 @@ export default function ResultCard({ result, onClick }) {
                                 ID: {result.matched_document.id?.slice(0, 8)}...
                             </p>
                         </div>
+                    ) : hasImage ? (
+                        <div>
+                            <p className="text-sm font-medium text-navy truncate">
+                                Kandidat dari web ({sourceLabel})
+                            </p>
+                            <p className="text-xs text-navy/50 mt-1">
+                                Klik untuk membandingkan gambar
+                            </p>
+                        </div>
                     ) : (
                         <div>
                             <a
@@ -50,6 +81,7 @@ export default function ResultCard({ result, onClick }) {
                                 rel="noopener noreferrer"
                                 className="text-sm font-medium text-primary-300 hover:text-primary-200 
                            underline underline-offset-2 truncate block transition-colors"
+                                onClick={(e) => e.stopPropagation()}
                             >
                                 {result.external_url}
                             </a>

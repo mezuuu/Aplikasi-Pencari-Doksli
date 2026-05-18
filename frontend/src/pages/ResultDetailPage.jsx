@@ -86,7 +86,7 @@ export default function ResultDetailPage() {
                 <div className="card py-3 px-4">
                     <p className="text-[10px] text-navy/50 uppercase tracking-wide mb-1">Sumber</p>
                     <p className="text-sm font-semibold text-navy">
-                        {data.search_source === 'local' ? 'Lokal' : data.search_source === 'google' ? 'Google' : 'Keduanya'}
+                        {data.search_source === 'local' ? 'Lokal' : data.search_source === 'google' ? 'Google' : data.search_source === 'bing' ? 'Bing' : 'Keduanya'}
                     </p>
                 </div>
                 <div className="card py-3 px-4">
@@ -113,7 +113,7 @@ export default function ResultDetailPage() {
                             <ResultCard 
                                 key={r.id} 
                                 result={r} 
-                                onClick={() => r.source_type === 'local' && setSelectedMatch(r)}
+                                onClick={() => r.matched_image_url && setSelectedMatch(r)}
                             />
                         ))}
                     </div>
@@ -125,7 +125,7 @@ export default function ResultDetailPage() {
             )}
 
             {/* Comparison Modal */}
-            {selectedMatch && selectedMatch.matched_document && (
+            {selectedMatch && selectedMatch.matched_image_url && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
                     {/* Backdrop */}
                     <div 
@@ -139,13 +139,13 @@ export default function ResultDetailPage() {
                         {/* Modal Header */}
                         <div className="flex items-center justify-between p-4 border-b border-white/10 bg-white/5">
                             <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                                ⚖️ Perbandingan Gambar
+                                Perbandingan Gambar
                             </h2>
                             <button 
                                 onClick={() => setSelectedMatch(null)}
                                 className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-red-500/80 transition-colors"
                             >
-                                ✕
+                                X
                             </button>
                         </div>
 
@@ -168,11 +168,13 @@ export default function ResultDetailPage() {
                                 </div>
                             </div>
 
-                            {/* Right: Matched Doksli (Asli) */}
+                            {/* Right: Matched Doksli */}
                             <div className="flex flex-col gap-3">
                                 <div className="flex items-center justify-between">
                                     <span className="px-3 py-1 bg-green-500/20 text-green-300 border border-green-500/30 rounded-lg text-sm font-bold flex gap-2">
-                                        <span>Doksli Tersedia</span>
+                                        <span>
+                                            {selectedMatch.source_type === 'local' ? 'Doksli Tersedia' : 'Kandidat Doksli (Web)'}
+                                        </span>
                                         <span className="bg-green-500/30 px-1.5 rounded text-green-200">
                                             {(selectedMatch.similarity_score * 100).toFixed(1)}% Match
                                         </span>
@@ -180,14 +182,21 @@ export default function ResultDetailPage() {
                                 </div>
                                 <div className="bg-black/50 rounded-xl border border-white/10 overflow-hidden flex items-center justify-center min-h-[300px]">
                                     <img 
-                                        src={selectedMatch.matched_document.image_url} 
-                                        alt="Original Document" 
+                                        src={selectedMatch.matched_image_url} 
+                                        alt="Matched Document" 
                                         className="max-w-full max-h-[60vh] object-contain"
                                     />
                                 </div>
-                                <p className="text-xs text-white/50 font-mono break-all text-center">
-                                    ID: {selectedMatch.matched_document.id}
-                                </p>
+                                {selectedMatch.matched_document && (
+                                    <p className="text-xs text-white/50 font-mono break-all text-center">
+                                        ID: {selectedMatch.matched_document.id}
+                                    </p>
+                                )}
+                                {selectedMatch.source_type !== 'local' && (
+                                    <p className="text-xs text-white/40 text-center">
+                                        Sumber: {selectedMatch.source_type === 'bing' ? 'Bing Image Search' : 'Google Vision'}
+                                    </p>
+                                )}
                             </div>
 
                         </div>

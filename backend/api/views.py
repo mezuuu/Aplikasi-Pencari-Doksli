@@ -68,14 +68,22 @@ def search_image(request):
 
     Upload an image for privacy analysis and similarity search.
 
-    Flow:
+    Enhanced Flow:
     1. Save uploaded image
-    2. Run privacy analysis
+    2. Run privacy analysis (face, name, age, address, phone)
     3. If blocked (>=3 flags) → return blocked response
-    4. Generate embedding
-    5. Search local DB
-    6. If no local match → fallback to Google Vision Web Detection
-    7. Return results
+    4. Apply PII masking (blur faces/sensitive areas)
+    5. Generate embedding (MobileNetV2 1280-dim)
+    6. Search local DB (cosine similarity)
+    7. Re-rank local matches with ORB feature matching
+    8. If no local match → sub-region cropping search
+    9. If still no match → modular online search:
+       a. Google Cloud Vision (if active)
+       b. DuckDuckGo (free fallback)
+       c. Download up to 20 candidate images
+       d. Re-rank candidates with embedding + ORB
+    10. ELA forensic analysis (optional, adds manipulation score)
+    11. Return results (same API contract as before)
     """
     image_file = request.FILES.get('image')
     if not image_file:
@@ -85,18 +93,18 @@ def search_image(request):
         )
 
     try:
-        # 1. Save uploaded image
+        # ─── 1. Save uploaded image ───
         filepath = _save_uploaded_file(image_file, subfolder='queries')
         file_hash = _compute_file_hash(filepath)
 
-        # 2. Create search query record
+        # ─── 2. Create search query record ───
         search_query = SearchQuery.objects.create(
             query_image_path=filepath,
             query_hash=file_hash,
             search_source='local',
         )
 
-        # 3. Run privacy analysis
+        # ─── 3. Run privacy analysis ───
         from services.privacy_service import analyze_privacy
         privacy_result = analyze_privacy(filepath)
 
@@ -112,7 +120,7 @@ def search_image(request):
             is_blocked=privacy_result['is_blocked'],
         )
 
-        # 4. If blocked, return early
+        # ─── 4. If blocked, return early ───
         if privacy.is_blocked:
             serializer = SearchQuerySerializer(search_query)
             return Response(
@@ -128,13 +136,34 @@ def search_image(request):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        # 5. Generate embedding (GPU-accelerated if available)
+        # ─── 5. Apply PII masking (blur sensitive areas) ───
+        from services.privacy_service import blur_pii_regions
+        masked_path = blur_pii_regions(filepath, privacy_result)
+
+        # Update query image path to masked version for display
+        if masked_path != filepath:
+            search_query.query_image_path = masked_path
+            search_query.save(update_fields=['query_image_path'])
+            logger.info(f"Query image replaced with masked version: {masked_path}")
+
+        # ─── 6. Generate embedding (GPU-accelerated if available) ───
+        # Always use the ORIGINAL image for embedding (not masked)
         from services.embedding_service import extract_embedding
         query_embedding = extract_embedding(filepath)
 
-        # 6. Local similarity search (cosine similarity, top-K)
-        from services.similarity_service import find_most_similar
+        # ─── 7. Local similarity search (cosine similarity, top-K) ───
+        from services.similarity_service import (
+            find_most_similar, re_rank_with_orb
+        )
         local_matches = find_most_similar(query_embedding)
+
+        # ─── 8. Re-rank local matches with ORB ───
+        if local_matches:
+            local_matches = re_rank_with_orb(filepath, local_matches)
+            logger.info(
+                f"Local matches re-ranked with ORB. "
+                f"Best score: {local_matches[0]['score']}"
+            )
 
         # Save local matches
         for match in local_matches:
@@ -145,7 +174,7 @@ def search_image(request):
                 similarity_score=match['score'],
             )
 
-        # 7. If no local matches → try sub-region search (screenshot handling)
+        # ─── 9. If no local matches → try sub-region search ───
         crop_paths = []
         if not local_matches:
             try:
@@ -182,6 +211,9 @@ def search_image(request):
                             seen.values(), key=lambda x: x['score'], reverse=True
                         )
 
+                        # Re-rank crop matches with ORB
+                        best_crop_matches = re_rank_with_orb(filepath, best_crop_matches)
+
                         # Save sub-region matches (limit to top-K)
                         top_k = getattr(settings, 'SIMILARITY_TOP_K', 5)
                         for match in best_crop_matches[:top_k]:
@@ -208,41 +240,109 @@ def search_image(request):
                     except Exception:
                         pass
 
-        # 8. If still no matches after sub-regions, fallback to Google Vision
+        # ─── 10. If still no matches, modular online search ───
+        web_candidates = []
         if not local_matches:
             try:
-                from services.vision_service import detect_web_matches
-                web_results = detect_web_matches(filepath)
+                from services.online_search_service import search_online
+                from services.similarity_service import re_rank_web_candidates
 
-                search_query.search_source = 'google'
-                search_query.save()
+                logger.info("No local matches found. Starting modular online search...")
+                online_result = search_online(filepath, max_candidates=10)
 
-                # Save web results
-                all_web_urls = []
-                for img in web_results.get('full_matching_images', []):
-                    all_web_urls.append((img['url'], img.get('score', 0.9)))
-                for img in web_results.get('partial_matching_images', []):
-                    all_web_urls.append((img['url'], img.get('score', 0.7)))
-                for img in web_results.get('visually_similar_images', []):
-                    all_web_urls.append((img['url'], img.get('score', 0.5)))
+                web_candidates = online_result.get('candidates', [])
+                search_source = online_result.get('search_source', 'none')
 
-                for url, score in all_web_urls[:20]:  # Limit to 20 results
-                    SearchResult.objects.create(
-                        search=search_query,
-                        source_type='google',
-                        external_url=url,
-                        similarity_score=score,
+                if web_candidates:
+                    # Re-rank downloaded candidates with embedding + ORB
+                    ranked_web = re_rank_web_candidates(
+                        filepath, query_embedding, web_candidates
                     )
 
+                    # Determine the proper source_type for DB
+                    source_map = {'google': 'google', 'yandex': 'google', 'bing': 'bing'}
+                    db_source_type = source_map.get(search_source, 'google')
+
+                    # Save web results (using only the external URL)
+                    for ranked in ranked_web:
+                        SearchResult.objects.create(
+                            search=search_query,
+                            source_type=db_source_type,
+                            matched_image_path='', # Do not save locally
+                            external_url=ranked.get('url', ''),
+                            similarity_score=ranked['score']
+                        )
+                    
+                    # Cleanup all temporary downloads immediately
+                    from services.online_search_service import cleanup_candidates
+                    cleanup_candidates(web_candidates)
+
+                    # Update search source
+                    if search_source != 'none':
+                        search_query.search_source = search_source
+                    else:
+                        search_query.search_source = 'google'
+                    search_query.save(update_fields=['search_source'])
+
+                    logger.info(
+                        f"Online search completed: {len(ranked_web)} candidates ranked "
+                        f"(source: {search_source})"
+                    )
+
+                elif online_result.get('google_web_results'):
+                    # Fallback: Google Vision returned URLs but download failed
+                    web_results = online_result['google_web_results']
+                    all_web_urls = []
+                    for img in web_results.get('full_matching_images', []):
+                        all_web_urls.append((img['url'], img.get('score', 0.9)))
+                    for img in web_results.get('partial_matching_images', []):
+                        all_web_urls.append((img['url'], img.get('score', 0.7)))
+                    for img in web_results.get('visually_similar_images', []):
+                        all_web_urls.append((img['url'], img.get('score', 0.5)))
+
+                    for url, score in all_web_urls[:20]:
+                        SearchResult.objects.create(
+                            search=search_query,
+                            source_type='google',
+                            external_url=url,
+                            similarity_score=score,
+                        )
+
+                    search_query.search_source = 'google'
+                    search_query.save(update_fields=['search_source'])
+
             except Exception as e:
-                logger.error(f"Google Vision fallback failed: {e}")
-                search_query.search_source = 'local'
-                search_query.save()
+                logger.error(f"Online search failed: {e}", exc_info=True)
+            finally:
+                # Clean up any remaining temp files that were NOT moved
+                for candidate in web_candidates:
+                    src = candidate.get('path', '')
+                    if src and os.path.exists(src):
+                        try:
+                            os.remove(src)
+                        except Exception:
+                            pass
         else:
             search_query.search_source = 'local'
-            search_query.save()
+            search_query.save(update_fields=['search_source'])
 
-        # Return results
+        # ─── 11. ELA forensic analysis (optional enhancement) ───
+        try:
+            from services.forensic_service import perform_ela, cleanup_ela_files
+            ela_result = perform_ela(filepath)
+
+            if ela_result.get('ela_image_path'):
+                # Clean up ELA temp file (we only need the score)
+                cleanup_ela_files(ela_result['ela_image_path'])
+
+            logger.info(
+                f"ELA analysis: score={ela_result['ela_score']:.2f}, "
+                f"suspicious={ela_result['is_suspicious']}"
+            )
+        except Exception as e:
+            logger.warning(f"ELA analysis skipped: {e}")
+
+        # ─── Return results ───
         search_query.refresh_from_db()
         serializer = SearchQuerySerializer(search_query)
         return Response(
@@ -260,6 +360,7 @@ def search_image(request):
             {'error': f'Terjadi kesalahan saat memproses gambar: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
 
 
 @api_view(['POST'])

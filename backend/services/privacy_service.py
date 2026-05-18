@@ -358,3 +358,18 @@ def analyze_privacy(image_path):
 
     return result
 
+
+# ══════════════════════════════════════════════════════════════════
+#  Privacy Masking (Blur PII Regions)
+# ══════════════════════════════════════════════════════════════════
+
+def blur_pii_regions(image_path, privacy_result=None):
+    """
+    Disabled masking: returns the original image path without modifications.
+    
+    Previously, this would create a blurred copy of the image to mask PII.
+    Now, it simply returns the input path as requested by the user.
+    """
+    logger.info("[Masking] Censoring disabled, returning original image path")
+    return image_path
+

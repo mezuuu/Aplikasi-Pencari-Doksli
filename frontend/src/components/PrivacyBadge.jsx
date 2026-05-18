@@ -17,7 +17,7 @@ export default function PrivacyBadge({ privacyData }) {
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-navy/80 flex items-center gap-2">
-                    🔒 Analisis Privasi
+                    Analisis Privasi
                 </h3>
                 <span className={isBlocked ? 'badge-danger' : 'badge-safe'}>
                     {isBlocked
