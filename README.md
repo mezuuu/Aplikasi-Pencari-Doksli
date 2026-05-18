@@ -345,7 +345,47 @@ Modul baru untuk mencari gambar asli di internet menggunakan reverse image searc
 | `cleanup_ela_files()` | Hapus file ELA sementara |
 
 ### `privacy_service.py` — Filter Privasi
-Sensor/masking gambar telah **dinonaktifkan**. Modul tetap menjalankan analisis deteksi untuk metadata privasi, namun gambar asli dikembalikan tanpa modifikasi.
+Modul inti yang menganalisis gambar untuk konten sensitif sebelum pemrosesan utama.
+
+> **Update terbaru:** Sensor/masking gambar telah **dinonaktifkan**. Modul tetap menjalankan analisis deteksi untuk metadata privasi, namun gambar asli dikembalikan tanpa modifikasi.
+
+| Fungsi | Deskripsi |
+|--------|-----------|
+| `analyze_privacy()` | Entry point utama — menjalankan seluruh pipeline deteksi |
+| `_local_detect_faces()` | Deteksi wajah via OpenCV Haar Cascade + Histogram Equalization |
+| `_local_detect_text()` | Ekstraksi teks via EasyOCR (bahasa Indonesia & Inggris) |
+| `_detect_name_in_text()` | Deteksi nama menggunakan indikator kata kunci (toleran _typo_ OCR) |
+| `_detect_age_in_text()` | Deteksi umur via regex pola `XX tahun` dan format TTL |
+| `_detect_address_in_text()` | Deteksi alamat dengan _word-boundary_ berlapis (strict + loose) |
+| `_detect_phone_in_text()` | Deteksi nomor telepon lokal (08x) dan internasional (+XX) |
+| `_detect_nik_in_text()` | Deteksi NIK/No. Identitas (16-digit agresif) |
+| `blur_pii_regions()` | ~~Masking PII~~ — dinonaktifkan, mengembalikan gambar asli |
+
+**Regex Patterns:**
+```python
+# NIK — Sangat resilien terhadap spasi dan kesalahan OCR
+NIK_PATTERN = r'\b\d[\d\sO]{14,20}\b'
+
+# Telepon — Format lokal Indonesia & internasional
+PHONE_PATTERN = r'(\+\d{1,4}[\s\-]?(?:\d[\s\-]?){7,14}|08[\s\-]?(?:\d[\s\-]?){7,12})'
+
+# Umur — Pola numerik + kata kunci
+AGE_PATTERN = r'\b(\d{1,3})\s*(?:tahun|thn|th)\b'
+
+# TTL — Tempat Tanggal Lahir
+TTL_PATTERN = r'(?:tempat|tgl|tanggal|lahir).{0,30}?\d{1,2}[\s\-/. ,]+\d{1,2}[\s\-/. ,]+\d{2,4}'
+```
+
+### `embedding_service.py` — Ekstraksi Fitur CNN
+Menggunakan **MobileNetV2** (pre-trained ImageNet) sebagai _feature extractor_.
+
+| Spesifikasi | Detail |
+|-------------|--------|
+| Model | MobileNetV2 (tanpa classifier) |
+| Input | 224×224 RGB, ImageNet normalization |
+| Output | Vektor 1280-dimensi, L2-normalized |
+| Device | Auto-detect CUDA GPU → fallback CPU |
+| Mode | Singleton loading, `torch.no_grad()` inference |
 
 ---
 
@@ -474,3 +514,36 @@ Total  : 215
 ---
 
 > Proyek ini dikembangkan sebagai bagian dari **Capstone Project**.
+
+---
+
+## Changelog
+
+### v2.0 — Multi-Metric Reverse Image Search (Mei 2025)
+
+#### Fitur Baru
+- **Yandex Reverse Image Search** menggantikan DuckDuckGo/Bing sebagai engine pencarian visual utama, dengan dua mode: `sites` (exact match) dan `similar` (visual similarity).
+- **Multi-Metric Re-Ranking** — sistem ranking baru menggunakan 4 metrik komplementer (pHash 30% + ORB 30% + Histogram 20% + Embedding 20%) untuk mendeteksi gambar asli yang ditimpa teks.
+- **Penalti ORB** — kandidat yang berbeda foto meski orangnya sama akan di-penalti 50% jika ORB ≈ 0.
+- **Forensic ELA Analysis** (`forensic_service.py`) — deteksi area manipulasi JPEG menggunakan Error Level Analysis.
+- **Perceptual Hash** (`phash_similarity`) dan **Histogram Similarity** (`histogram_similarity`) ditambahkan ke `similarity_service.py`.
+- **`online_search_service.py`** — modul baru yang mengelola seluruh pipeline pencarian web (Google Vision → Yandex Sites → Yandex Similar → Google Lens → Bing fallback).
+
+#### Perubahan Backend
+- `SearchResult` model: tambah kolom `matched_image_path` dan `external_url` (migration `0002`, `0003`).
+- Gambar kandidat web **tidak lagi disimpan permanen** di server. File temp dihapus otomatis via `cleanup_candidates()` setelah ranking selesai.
+- Serializer: `matched_image_url` kini mendukung fallback ke `external_url` untuk hasil web.
+- **Sensor/masking dinonaktifkan** (`blur_pii_regions` dikembalikan langsung tanpa proses).
+- Maksimal **10 kandidat** yang diunduh dan dibandingkan per sesi pencarian.
+
+#### Perubahan Frontend
+- `SearchPage`: hanya menampilkan **Top 3 hasil** di halaman utama, lengkap dengan navigasi klik ke halaman detail.
+- `ResultDetailPage`: menampilkan seluruh kandidat (hingga 10) dengan modal perbandingan side-by-side.
+- `ResultCard`: mendukung prop `onClick` untuk navigasi langsung ke detail.
+
+#### Bug Fix
+- **TypeError** pada `SearchResult.objects.create` akibat field `metadata` yang tidak ada di model database — dihapus dari kode.
+
+---
+
+> _Seluruh sistem ini dirancang untuk berjalan otomatis pada environment CPU maupun GPU tanpa memerlukan fine-tuning atau pelatihan model (pre-trained inference only)._
