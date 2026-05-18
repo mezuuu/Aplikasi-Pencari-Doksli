@@ -1,5 +1,7 @@
 # Aplikasi Pencari Doksli — Sistem Deteksi Manipulasi Gambar
 
+![Screenshot Aplikasi](screenshot.png)
+
 **Aplikasi Pencari Doksli** (Dokumen Asli) adalah aplikasi berbasis web untuk mendeteksi manipulasi gambar dengan fitur filter privasi otomatis dan pencarian kemiripan gambar menggunakan teknologi _Machine Learning_. Sistem mampu membandingkan gambar yang diunggah pengguna terhadap database dokumen asli secara lokal maupun melalui reverse image search di internet.
 
 ---
@@ -412,6 +414,7 @@ npm run dev
 |---------|-----|
 | Frontend | http://localhost:5173 |
 | Backend API | http://localhost:8000/api/ |
+| Django Admin | http://localhost:8000/admin/ |
 
 ---
 
@@ -423,7 +426,11 @@ SECRET_KEY=your-secret-key-here
 DEBUG=True
 
 # Database (PostgreSQL)
-DATABASE_URL=postgres://username:password@localhost:5432/doksli_db
+DB_NAME=doksli_db
+DB_USER=postgres
+DB_PASSWORD=your-db-password
+DB_HOST=localhost
+DB_PORT=5432
 
 # Google Cloud Vision API (opsional)
 GOOGLE_CLOUD_API_KEY=your-api-key-here
@@ -431,6 +438,10 @@ GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
 
 # Privacy Filter
 PRIVACY_FLAG_THRESHOLD=3
+
+# Admin Credentials (default untuk development)
+# Username: admin
+# Password: set via `python manage.py createsuperuser`
 ```
 
 ---
