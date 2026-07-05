@@ -11,6 +11,7 @@ Enhanced with ORB (Oriented FAST and Rotated BRIEF) feature matching
 for pixel-level verification of top candidates.
 """
 import logging
+import os
 import numpy as np
 from django.conf import settings
 logger = logging.getLogger(__name__)
@@ -246,6 +247,16 @@ class SimilarityService:
             if not doc_image_path:
                 continue
             embedding_score = candidate.get('score', 0.0)
+            if not os.path.exists(doc_image_path):
+                ranked.append({
+                    **candidate,
+                    'score': round(embedding_score, 6),
+                    'embedding_score': round(embedding_score, 6),
+                    'phash_score': 0.0,
+                    'orb_score': 0.0,
+                    'hist_score': 0.0,
+                })
+                continue
             ph_score = SimilarityService.phash_similarity(query_image_path, doc_image_path)
             orb_score_val = SimilarityService.orb_similarity(query_image_path, doc_image_path)
             hist_score = SimilarityService.histogram_similarity(query_image_path, doc_image_path)
