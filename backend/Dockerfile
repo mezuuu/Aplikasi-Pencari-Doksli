@@ -28,8 +28,12 @@ COPY . /app/
 RUN mkdir -p /app/media /app/db
 RUN chmod -R 777 /app/media /app/db
 
-# Expose port (Hugging Face Spaces default 7860, Render default 10000)
+# Copy entrypoint script dan beri izin eksekusi
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# Expose port (Hugging Face Spaces default 7860)
 EXPOSE 7860
 
-# Jalankan server menggunakan Gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:7860", "--workers", "2", "--timeout", "120", "config.wsgi:application"]
+# Jalankan entrypoint: migrate → collectstatic → gunicorn
+CMD ["/bin/bash", "/app/entrypoint.sh"]
