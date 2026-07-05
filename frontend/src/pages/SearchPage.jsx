@@ -66,9 +66,9 @@ export default function SearchPage() {
     const displayPreviewUrl = queryPreviewUrl || searchData?.query_image_url
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-6">
             {/* Hero Section */}
-            <div className="text-center space-y-4 py-4">
+            <div className="text-center space-y-2 pb-2">
                 <h1 className="text-3xl sm:text-4xl font-extrabold">
                     <span className="gradient-text">Analisis Gambar</span>
                 </h1>
@@ -211,7 +211,7 @@ export default function SearchPage() {
 
             {/* Feature Cards */}
             {!result && !loading && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-12">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8">
                     {[
                         {
                             icon: '',

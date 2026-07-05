@@ -11,12 +11,12 @@ export default function Layout({ children }) {
 
             <Navbar />
             
-            <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-12">
+            <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
                 {children}
             </main>
             
-            <footer className="relative z-10 py-8 mt-auto border-t w-full" style={{ borderColor: 'var(--glass-border)', backgroundColor: 'var(--glass-bg)' }}>
-                <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4 text-xs font-medium" style={{ color: 'var(--text-color)', opacity: 0.5 }}>
+            <footer className="relative z-10 py-6 mt-auto border-t w-full" style={{ borderColor: 'var(--glass-border)', backgroundColor: 'var(--glass-bg)' }}>
+                <div className="w-full px-4 sm:px-8 lg:px-12 flex flex-col md:flex-row justify-between items-center gap-4 text-xs font-medium" style={{ color: 'var(--text-color)', opacity: 0.5 }}>
                     <div className="flex items-center gap-2">
                         <span className="font-display font-bold">Pencari Doksli</span>
                         <span>© 2026</span>
