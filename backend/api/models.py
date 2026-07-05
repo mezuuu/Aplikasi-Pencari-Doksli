@@ -17,6 +17,16 @@ class OriginalDocument(models.Model):
     """An original document stored in the local database for similarity comparison."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     image_path = models.TextField(help_text="Path to the stored image file")
+    image_data = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Base64 image data fallback for deployments without persistent media storage"
+    )
+    image_mime_type = models.CharField(
+        max_length=100,
+        default='image/jpeg',
+        help_text="MIME type for image_data"
+    )
     embedding_vector = models.JSONField(
         default=list,
         help_text="Float array of the CNN embedding vector"

@@ -8,7 +8,9 @@ Endpoints:
 - GET  /api/originals/    → List stored original documents
 """
 import hashlib
+import base64
 import logging
+import mimetypes
 import os
 import uuid
 from django.conf import settings
@@ -55,6 +57,16 @@ class FileHelper:
             for chunk in iter(lambda: f.read(8192), b''):
                 sha256.update(chunk)
         return sha256.hexdigest()
+
+    @staticmethod
+    def _encode_image_data(filepath):
+        """Return base64 image data and MIME type for durable DB fallback."""
+        mime_type, _ = mimetypes.guess_type(filepath)
+        if not mime_type or not mime_type.startswith('image/'):
+            mime_type = 'image/jpeg'
+        with open(filepath, 'rb') as f:
+            image_data = base64.b64encode(f.read()).decode('ascii')
+        return image_data, mime_type
 
 class SearchImageView(APIView):
     parser_classes = [MultiPartParser, FormParser]
@@ -265,13 +277,32 @@ class AddOriginalView(APIView):
         try:
             filepath = FileHelper._save_uploaded_file(image_file, subfolder='originals')
             file_hash = FileHelper._compute_file_hash(filepath)
+            image_data, image_mime_type = FileHelper._encode_image_data(filepath)
             existing = OriginalDocument.objects.filter(file_hash=file_hash).first()
             if existing:
+                update_fields = []
+                if existing.image_path != filepath:
+                    existing.image_path = filepath
+                    update_fields.append('image_path')
+                if not existing.image_data:
+                    existing.image_data = image_data
+                    update_fields.append('image_data')
+                if existing.image_mime_type != image_mime_type:
+                    existing.image_mime_type = image_mime_type
+                    update_fields.append('image_mime_type')
+                if update_fields:
+                    existing.save(update_fields=update_fields)
                 serializer = OriginalDocumentSerializer(existing)
                 return Response({'status': 'duplicate', 'message': 'Dokumen dengan hash yang sama sudah ada di database.', 'data': serializer.data}, status=status.HTTP_409_CONFLICT)
             from services.embedding_service import EmbeddingService
             embedding = EmbeddingService.extract_embedding(filepath)
-            document = OriginalDocument.objects.create(image_path=filepath, embedding_vector=embedding, file_hash=file_hash)
+            document = OriginalDocument.objects.create(
+                image_path=filepath,
+                image_data=image_data,
+                image_mime_type=image_mime_type,
+                embedding_vector=embedding,
+                file_hash=file_hash,
+            )
             serializer = OriginalDocumentSerializer(document)
             return Response({'status': 'success', 'message': 'Dokumen asli berhasil ditambahkan.', 'data': serializer.data}, status=status.HTTP_201_CREATED)
         except Exception as e:

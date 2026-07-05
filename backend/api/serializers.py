@@ -31,6 +31,24 @@ def _image_path_to_url(image_path):
     return f"{settings.MEDIA_URL}{relative}"
 
 
+def _document_image_url(obj):
+    if not obj:
+        return None
+
+    image_path = getattr(obj, 'image_path', None)
+    if image_path:
+        path_str = str(image_path)
+        if os.path.exists(path_str):
+            return _image_path_to_url(path_str)
+
+    image_data = getattr(obj, 'image_data', None)
+    if image_data:
+        mime_type = getattr(obj, 'image_mime_type', 'image/jpeg') or 'image/jpeg'
+        return f"data:{mime_type};base64,{image_data}"
+
+    return _image_path_to_url(image_path)
+
+
 class DocumentLabelSerializer(serializers.ModelSerializer):
     class Meta:
         model = DocumentLabel
@@ -46,7 +64,7 @@ class OriginalDocumentSerializer(serializers.ModelSerializer):
         fields = ['id', 'image_path', 'image_url', 'file_hash', 'created_at', 'labels']
 
     def get_image_url(self, obj):
-        return _image_path_to_url(obj.image_path)
+        return _document_image_url(obj)
 
 
 class OriginalDocumentListSerializer(serializers.ModelSerializer):
@@ -59,7 +77,7 @@ class OriginalDocumentListSerializer(serializers.ModelSerializer):
         fields = ['id', 'image_path', 'image_url', 'file_hash', 'created_at', 'label_count']
 
     def get_image_url(self, obj):
-        return _image_path_to_url(obj.image_path)
+        return _document_image_url(obj)
 
 
 class PrivacyAnalysisSerializer(serializers.ModelSerializer):
@@ -91,8 +109,8 @@ class SearchResultSerializer(serializers.ModelSerializer):
         - Web results: use local matched_image_path OR external_url (direct link)
         """
         # Priority 1: local matched document
-        if obj.matched_document and obj.matched_document.image_path:
-            return _image_path_to_url(obj.matched_document.image_path)
+        if obj.matched_document:
+            return _document_image_url(obj.matched_document)
         
         # Priority 2: web candidate stored locally
         if obj.matched_image_path:

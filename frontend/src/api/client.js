@@ -22,6 +22,7 @@ const client = axios.create({
  */
 export const getImageUrl = (url) => {
     if (!url) return ''
+    if (url.startsWith('data:')) return url
     if (url.startsWith('http://') || url.startsWith('https://')) return url
     return apiBase ? `${apiBase}${url}` : url
 }
