@@ -220,6 +220,61 @@ class SimilarityService:
         return re_ranked
 
     @staticmethod
+    def re_rank_local_candidates(query_image_path, candidates):
+        """
+    Re-rank local database candidates using exact-image signals.
+
+    CNN embeddings are useful for broad semantic similarity, but edited news
+    cards can be dominated by a background photo. This ranking favors local
+    visual evidence so a stored Doksli document wins over a generic web
+    background candidate.
+    """
+        if not candidates:
+            return []
+        W_PHASH = 0.25
+        W_ORB = 0.35
+        W_HIST = 0.15
+        W_EMB = 0.25
+        ranked = []
+        for candidate in candidates:
+            doc = candidate.get('document')
+            doc_image_path = None
+            if hasattr(doc, 'image_path'):
+                doc_image_path = str(doc.image_path)
+            elif isinstance(doc, dict):
+                doc_image_path = doc.get('image_path') or doc.get('path')
+            if not doc_image_path:
+                continue
+            embedding_score = candidate.get('score', 0.0)
+            ph_score = SimilarityService.phash_similarity(query_image_path, doc_image_path)
+            orb_score_val = SimilarityService.orb_similarity(query_image_path, doc_image_path)
+            hist_score = SimilarityService.histogram_similarity(query_image_path, doc_image_path)
+            combined_score = (
+                W_PHASH * ph_score
+                + W_ORB * orb_score_val
+                + W_HIST * hist_score
+                + W_EMB * embedding_score
+            )
+            ranked.append({
+                **candidate,
+                'score': round(combined_score, 6),
+                'embedding_score': round(embedding_score, 6),
+                'phash_score': round(ph_score, 6),
+                'orb_score': round(orb_score_val, 6),
+                'hist_score': round(hist_score, 6),
+            })
+        ranked.sort(key=lambda x: x['score'], reverse=True)
+        if ranked:
+            best = ranked[0]
+            logger.info(
+                f"[Re-rank Local] Ranked {len(ranked)} local candidates. "
+                f"Best score: {best['score']:.4f} "
+                f"(pHash={best['phash_score']:.4f}, ORB={best['orb_score']:.4f}, "
+                f"hist={best['hist_score']:.4f}, emb={best['embedding_score']:.4f})"
+            )
+        return ranked
+
+    @staticmethod
     def re_rank_web_candidates(query_image_path, query_embedding, candidates):
         """
     Rank downloaded web candidate images using multi-metric similarity.
@@ -278,6 +333,45 @@ class SimilarityService:
             best = ranked[0]
             logger.info(f"[Re-rank Web] Ranked {len(ranked)} web candidates. Best score: {best['score']:.4f} (pHash={best['phash_score']:.4f}, ORB={best['orb_score']:.4f}, hist={best['hist_score']:.4f}, emb={best['embedding_score']:.4f})")
         return ranked
+
+    @staticmethod
+    def find_candidate_pool(query_embedding, min_similarity=None, top_k=None):
+        """
+    Return a broader local candidate pool before visual re-ranking.
+
+    This intentionally does not require SIMILARITY_THRESHOLD. It is used as a
+    first-pass retrieval step so manipulated screenshots/posters still get
+    compared against Supabase/local originals before online fallback.
+    """
+        from api.models import OriginalDocument
+        if min_similarity is None:
+            min_similarity = getattr(settings, 'LOCAL_CANDIDATE_MIN', 0.35)
+        if top_k is None:
+            top_k = max(getattr(settings, 'SIMILARITY_TOP_K', 5) * 4, 20)
+        documents = OriginalDocument.objects.all()
+        if not documents.exists():
+            logger.info('No original documents in database for local candidate search')
+            return []
+        query_vec = np.array(query_embedding, dtype=np.float32)
+        candidates = []
+        for doc in documents:
+            if not doc.embedding_vector:
+                continue
+            try:
+                doc_vec = np.array(doc.embedding_vector, dtype=np.float32)
+                score = SimilarityService.cosine_similarity(query_vec, doc_vec)
+                if score >= min_similarity:
+                    candidates.append({'document': doc, 'score': round(score, 6)})
+            except Exception as e:
+                logger.error(f'Candidate similarity computation error for doc {doc.id}: {e}')
+                continue
+        candidates.sort(key=lambda x: x['score'], reverse=True)
+        candidates = candidates[:top_k]
+        logger.info(
+            f'Local candidate pool: {len(candidates)} candidates '
+            f'(min={min_similarity}, top_k={top_k}, total_docs={documents.count()})'
+        )
+        return candidates
 
     @staticmethod
     def find_most_similar(query_embedding, threshold=None, top_k=None, min_similarity=None):

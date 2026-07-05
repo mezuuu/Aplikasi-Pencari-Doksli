@@ -21,6 +21,18 @@ from .models import OriginalDocument, SearchQuery, PrivacyAnalysis, SearchResult
 from .serializers import SearchQuerySerializer, OriginalDocumentSerializer, OriginalDocumentListSerializer
 logger = logging.getLogger(__name__)
 
+class HealthCheckView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        original_count = OriginalDocument.objects.count()
+        return Response({
+            'status': 'ok',
+            'service': 'pencari-doksli-api',
+            'original_count': original_count,
+        }, status=status.HTTP_200_OK)
+
 class FileHelper:
     @staticmethod
     def _save_uploaded_file(uploaded_file, subfolder='uploads'):
@@ -91,10 +103,29 @@ class SearchImageView(APIView):
             from services.embedding_service import EmbeddingService
             query_embedding = EmbeddingService.extract_embedding(filepath)
             from services.similarity_service import SimilarityService
-            local_matches = SimilarityService.find_most_similar(query_embedding)
-            if local_matches:
-                local_matches = SimilarityService.re_rank_with_orb(filepath, local_matches)
-                logger.info(f"Local matches re-ranked with ORB. Best score: {local_matches[0]['score']}")
+            local_original_count = OriginalDocument.objects.count()
+            local_matches = []
+            if local_original_count:
+                local_candidates = SimilarityService.find_candidate_pool(query_embedding)
+                local_candidates = SimilarityService.re_rank_local_candidates(filepath, local_candidates)
+                local_threshold = getattr(settings, 'LOCAL_MATCH_THRESHOLD', 0.5)
+                top_k = getattr(settings, 'SIMILARITY_TOP_K', 5)
+                local_matches = [
+                    match for match in local_candidates
+                    if match.get('score', 0) >= local_threshold
+                ][:top_k]
+                if local_matches:
+                    logger.info(
+                        f"Local search accepted {len(local_matches)} match(es). "
+                        f"Best score: {local_matches[0]['score']}"
+                    )
+                else:
+                    logger.info(
+                        f'Local search checked {local_original_count} document(s) '
+                        f'but found no match above threshold {local_threshold}.'
+                    )
+            else:
+                logger.warning('Local search skipped because original document database is empty.')
             for match in local_matches:
                 SearchResult.objects.create(search=search_query, source_type='local', matched_document=match['document'], similarity_score=match['score'])
             crop_paths = []
@@ -108,7 +139,7 @@ class SearchImageView(APIView):
                         for crop_path in crop_paths:
                             try:
                                 crop_embedding = EmbeddingService.extract_embedding(crop_path)
-                                crop_matches = SimilarityService.find_most_similar(crop_embedding)
+                                crop_matches = SimilarityService.find_candidate_pool(crop_embedding)
                                 for match in crop_matches:
                                     best_crop_matches.append(match)
                             except Exception as e:
@@ -121,12 +152,20 @@ class SearchImageView(APIView):
                                 if doc_id not in seen or match['score'] > seen[doc_id]['score']:
                                     seen[doc_id] = match
                             best_crop_matches = sorted(seen.values(), key=lambda x: x['score'], reverse=True)
-                            best_crop_matches = SimilarityService.re_rank_with_orb(filepath, best_crop_matches)
+                            best_crop_matches = SimilarityService.re_rank_local_candidates(filepath, best_crop_matches)
+                            local_threshold = getattr(settings, 'LOCAL_MATCH_THRESHOLD', 0.5)
                             top_k = getattr(settings, 'SIMILARITY_TOP_K', 5)
-                            for match in best_crop_matches[:top_k]:
+                            best_crop_matches = [
+                                match for match in best_crop_matches
+                                if match.get('score', 0) >= local_threshold
+                            ][:top_k]
+                            for match in best_crop_matches:
                                 SearchResult.objects.create(search=search_query, source_type='local', matched_document=match['document'], similarity_score=match['score'])
-                            local_matches = best_crop_matches[:top_k]
-                            logger.info(f"Sub-region search found {len(local_matches)} match(es). Best score: {local_matches[0]['score']}")
+                            local_matches = best_crop_matches
+                            if local_matches:
+                                logger.info(f"Sub-region search found {len(local_matches)} match(es). Best score: {local_matches[0]['score']}")
+                            else:
+                                logger.info(f'Sub-region search found no match above threshold {local_threshold}.')
                 except Exception as e:
                     logger.error(f'Sub-region search error: {e}', exc_info=True)
                 finally:
@@ -147,6 +186,11 @@ class SearchImageView(APIView):
                     search_source = online_result.get('search_source', 'none')
                     if web_candidates:
                         ranked_web = SimilarityService.re_rank_web_candidates(filepath, query_embedding, web_candidates)
+                        online_threshold = getattr(settings, 'ONLINE_MATCH_THRESHOLD', 0.65)
+                        ranked_web = [
+                            ranked for ranked in ranked_web
+                            if ranked.get('score', 0) >= online_threshold
+                        ]
                         source_map = {'google': 'google', 'yandex': 'google', 'bing': 'bing'}
                         db_source_type = source_map.get(search_source, 'google')
                         for ranked in ranked_web:
@@ -158,10 +202,14 @@ class SearchImageView(APIView):
                         else:
                             search_query.search_source = 'google'
                         search_query.save(update_fields=['search_source'])
-                        logger.info(f'Online search completed: {len(ranked_web)} candidates ranked (source: {search_source})')
+                        logger.info(
+                            f'Online search accepted {len(ranked_web)} candidate(s) '
+                            f'above threshold {online_threshold} (source: {search_source})'
+                        )
                     elif online_result.get('google_web_results'):
                         web_results = online_result['google_web_results']
                         all_web_urls = []
+                        online_threshold = getattr(settings, 'ONLINE_MATCH_THRESHOLD', 0.65)
                         for img in web_results.get('full_matching_images', []):
                             all_web_urls.append((img['url'], img.get('score', 0.9)))
                         for img in web_results.get('partial_matching_images', []):
@@ -169,6 +217,8 @@ class SearchImageView(APIView):
                         for img in web_results.get('visually_similar_images', []):
                             all_web_urls.append((img['url'], img.get('score', 0.5)))
                         for url, score in all_web_urls[:20]:
+                            if score < online_threshold:
+                                continue
                             SearchResult.objects.create(search=search_query, source_type='google', external_url=url, similarity_score=score)
                         search_query.search_source = 'google'
                         search_query.save(update_fields=['search_source'])

@@ -169,8 +169,11 @@ GOOGLE_APPLICATION_CREDENTIALS = os.getenv(
 os.environ.setdefault('GOOGLE_APPLICATION_CREDENTIALS', GOOGLE_APPLICATION_CREDENTIALS)
 
 # ML Settings
-SIMILARITY_THRESHOLD = 0.85   # Minimum score to count as a match
-SIMILARITY_MIN = 0.6          # Absolute floor — ignore anything below this
+SIMILARITY_THRESHOLD = 0.80   # Minimum local embedding score to count as a direct match
+SIMILARITY_MIN = 0.6          # Absolute floor for direct local embedding matches
+LOCAL_CANDIDATE_MIN = 0.35    # Wider local pool before visual re-ranking
+LOCAL_MATCH_THRESHOLD = 0.50  # Minimum visual re-ranked local score to accept
+ONLINE_MATCH_THRESHOLD = 0.65 # Minimum web score to show as a candidate
 SIMILARITY_TOP_K = 5          # Maximum results to return
 PRIVACY_FLAG_THRESHOLD = 3    # Block if >= 3 privacy flags detected
 

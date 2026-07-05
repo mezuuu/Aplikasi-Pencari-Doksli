@@ -6,6 +6,7 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path('health/', views.HealthCheckView.as_view(), name='health-check'),
     path('search/', views.SearchImageView.as_view(), name='search-image'),
     path('add-original/', views.AddOriginalView.as_view(), name='add-original'),
     path('results/<uuid:search_id>/', views.ResultDetailView.as_view(), name='result-detail'),

@@ -1,7 +1,16 @@
 import axios from 'axios'
 
-// Dynamically use VITE_API_URL if set (production), default to relative /api for local dev proxy
-const apiBase = import.meta.env.VITE_API_URL || ''
+const normalizeApiBase = (value) => {
+    const raw = (value || '').trim()
+    if (!raw) return ''
+
+    const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
+    return withProtocol.replace(/\/+$/, '').replace(/\/api$/i, '')
+}
+
+// VITE_API_URL should point to the backend origin, for example:
+// https://just-mezuu-pencari-doksli.hf.space
+const apiBase = normalizeApiBase(import.meta.env.VITE_API_URL)
 
 const client = axios.create({
     baseURL: apiBase ? `${apiBase}/api` : '/api',
