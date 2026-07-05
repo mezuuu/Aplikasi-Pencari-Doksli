@@ -146,9 +146,14 @@ REST_FRAMEWORK = {
     },
 }
 
+def _clean_env_value(name, default=''):
+    value = os.getenv(name, default)
+    return value.strip().strip('"').strip("'")
+
+
 # Admin credentials — ambil dari environment variable, bukan hardcode!
-ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
-ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')
+ADMIN_USERNAME = _clean_env_value('ADMIN_USERNAME', 'admin')
+ADMIN_PASSWORD = _clean_env_value('ADMIN_PASSWORD', 'admin123')
 
 # Google Cloud Vision API
 GOOGLE_CLOUD_API_KEY = os.getenv('GOOGLE_CLOUD_API_KEY', '')

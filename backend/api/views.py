@@ -320,8 +320,8 @@ class AdminLoginView(APIView):
         Simple admin authentication with hardcoded credentials.
         Returns a token-like response for frontend session management.
         """
-        username = request.data.get('username', '')
-        password = request.data.get('password', '')
+        username = str(request.data.get('username', '')).strip()
+        password = str(request.data.get('password', '')).strip()
         if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
             return Response({'status': 'success', 'message': 'Login berhasil.', 'admin': True}, status=status.HTTP_200_OK)
         return Response({'error': 'Username atau password salah.'}, status=status.HTTP_401_UNAUTHORIZED)
