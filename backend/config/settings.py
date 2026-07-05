@@ -123,6 +123,13 @@ REST_FRAMEWORK = {
 # Google Cloud Vision API
 GOOGLE_CLOUD_API_KEY = os.getenv('GOOGLE_CLOUD_API_KEY', '')
 
+# Gemini API — supports key pool for automatic rotation
+# Use GEMINI_API_KEYS (comma-separated) for multiple keys:
+#   GEMINI_API_KEYS=key1,key2,key3
+# Or GEMINI_API_KEY for a single key (fallback):
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
+GEMINI_API_KEYS = os.getenv('GEMINI_API_KEYS', '')
+
 # Google Cloud Service Account credentials (JSON key file)
 GOOGLE_APPLICATION_CREDENTIALS = os.getenv(
     'GOOGLE_APPLICATION_CREDENTIALS',

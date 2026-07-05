@@ -4,14 +4,18 @@ Modular online image search service.
 Provides a fallback pipeline when Google Cloud Vision API is unavailable:
 1. Google Cloud Vision Web Detection (if API key/credentials active)
 2. Yandex Reverse Image Search (free, visual similarity - like Google Lens)
+2.5. Google Lens direct upload (bonus, may return nothing due to JS)
+2.7. Gemini AI keyword extraction (if GEMINI_API_KEY is set)
 3. Bing Image Search via icrawler (free, keyword-based fallback)
 
 Strategy:
 - Yandex is the PRIMARY free fallback because it performs actual reverse
   image search (uploading the image and finding visual matches), similar
   to how Google Lens works.
-- Bing/icrawler is a SECONDARY fallback using OCR keywords, only used
-  if Yandex fails entirely.
+- Gemini AI generates high-quality search keywords by understanding image
+  content (document type, logos, context) — far superior to basic OCR.
+- Bing/icrawler is a SECONDARY fallback using keywords (from Gemini or OCR),
+  only used if reverse image search methods fail entirely.
 """
 
 import logging
@@ -566,6 +570,8 @@ def search_online(image_path, max_candidates=MAX_CANDIDATES):
     Priority:
     1. Google Cloud Vision (if API key/credentials available)
     2. Yandex Reverse Image Search (free, visual - like Google Lens)
+    2.5. Google Lens (bonus layer)
+    2.7. Gemini AI keyword generation (if GEMINI_API_KEY is set)
     3. Bing Image Search via icrawler (free, keyword-based)
 
     Args:
@@ -575,8 +581,10 @@ def search_online(image_path, max_candidates=MAX_CANDIDATES):
     Returns:
         dict with:
             - candidates: list[dict] -- downloaded candidate images
-            - search_source: str -- 'google', 'yandex', 'bing', or 'none'
+            - search_source: str -- 'google', 'yandex', 'gemini+google',
+                                     'gemini+bing', 'bing', or 'none'
             - google_web_results: dict -- raw Google Vision results (if used)
+            - gemini_analysis: dict -- Gemini image analysis (if used)
             - total_urls_found: int -- total URLs discovered
             - search_query: str -- keyword query used (if applicable)
     """
@@ -584,6 +592,7 @@ def search_online(image_path, max_candidates=MAX_CANDIDATES):
         'candidates': [],
         'search_source': 'none',
         'google_web_results': {},
+        'gemini_analysis': {},
         'total_urls_found': 0,
         'search_query': '',
     }
@@ -635,12 +644,75 @@ def search_online(image_path, max_candidates=MAX_CANDIDATES):
                 result['search_source'] = 'google'
             logger.info(f"[Online Search] Google Lens returned {len(lens_urls)} URLs")
 
+    # --- Strategy 2.7: Gemini AI + Google Search Grounding ---
+    # Use Gemini to:
+    # 1. Search Google for this image (returns actual URLs)
+    # 2. Generate high-quality keywords (if no URLs found)
+    gemini_keywords = ''
+    remaining_needed = max_candidates - len(all_url_candidates) - len(direct_candidates)
+
+    if remaining_needed > 0:
+        try:
+            from services.gemini_search_service import (
+                is_gemini_available,
+                gemini_enhanced_keyword_search,
+            )
+
+            if is_gemini_available():
+                logger.info("[Online Search] Using Gemini AI + Google Search...")
+                gemini_query, gemini_urls, gemini_analysis = (
+                    gemini_enhanced_keyword_search(image_path)
+                )
+
+                result['gemini_analysis'] = gemini_analysis
+
+                # If Gemini found actual URLs via Google Search, add them
+                if gemini_urls:
+                    existing = set(all_url_candidates)
+                    added = 0
+                    for url in gemini_urls:
+                        if url not in existing:
+                            # Prioritize Gemini+Google results
+                            all_url_candidates.insert(0, url)
+                            existing.add(url)
+                            added += 1
+
+                    if result['search_source'] == 'none':
+                        result['search_source'] = 'gemini+google'
+                    logger.info(
+                        f"[Online Search] Gemini+Google Search found "
+                        f"{added} new URLs"
+                    )
+
+                if gemini_query:
+                    gemini_keywords = gemini_query
+                    result['search_query'] = gemini_query
+                    logger.info(
+                        f"[Online Search] Gemini keywords: "
+                        f"'{gemini_query[:80]}'"
+                    )
+        except ImportError:
+            logger.debug("[Online Search] Gemini search service not available")
+        except Exception as e:
+            logger.warning(f"[Online Search] Gemini analysis failed: {e}")
+
     # --- Strategy 3: Bing keyword search (last resort fallback) ---
     remaining_needed = max_candidates - len(all_url_candidates) - len(direct_candidates)
 
     if remaining_needed > 0 and not all_url_candidates:
-        logger.info("[Online Search] Using Bing/icrawler keyword fallback...")
-        keywords = _extract_search_keywords(image_path)
+        # Use Gemini keywords if available, otherwise fall back to OCR
+        if gemini_keywords:
+            keywords = gemini_keywords
+            search_source_label = 'gemini+bing'
+            logger.info(
+                f"[Online Search] Using Gemini-enhanced keywords for Bing: "
+                f"'{keywords[:80]}'"
+            )
+        else:
+            logger.info("[Online Search] Using OCR keyword fallback for Bing...")
+            keywords = _extract_search_keywords(image_path)
+            search_source_label = 'bing'
+
         result['search_query'] = keywords
 
         if keywords:
@@ -648,7 +720,7 @@ def search_online(image_path, max_candidates=MAX_CANDIDATES):
             if bing_candidates:
                 direct_candidates.extend(bing_candidates)
                 if result['search_source'] == 'none':
-                    result['search_source'] = 'bing'
+                    result['search_source'] = search_source_label
                 logger.info(
                     f"[Online Search] Bing downloaded {len(bing_candidates)} candidates"
                 )
