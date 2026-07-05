@@ -1,3 +1,5 @@
+import { getImageUrl } from '../api/client'
+
 export default function ResultCard({ result, onClick }) {
     if (!result) return null
 
@@ -25,7 +27,7 @@ export default function ResultCard({ result, onClick }) {
     const sourceLabel = isLocal ? 'Lokal' : result.source_type === 'bing' ? 'Bing' : 'Google'
 
     // Image URL to display (works for both local and web results)
-    const imageUrl = result.matched_image_url || result.matched_document?.image_url
+    const imageUrl = getImageUrl(result.matched_image_url || result.matched_document?.image_url)
 
     return (
         <div 

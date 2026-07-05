@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import ImageUpload from '../components/ImageUpload'
-import { adminLogin, addOriginal, deleteOriginal, listOriginals } from '../api/client'
+import { adminLogin, addOriginal, deleteOriginal, listOriginals, getImageUrl } from '../api/client'
 
 export default function AdminPage() {
     // Auth state
@@ -284,7 +284,7 @@ export default function AdminPage() {
                                 <div className="shrink-0 w-16 h-16 rounded-lg bg-black/5 dark:bg-white/5 overflow-hidden">
                                     {doc.image_url ? (
                                         <img
-                                            src={doc.image_url}
+                                            src={getImageUrl(doc.image_url)}
                                             alt="Dokumen"
                                             className="w-full h-full object-cover"
                                             loading="lazy"

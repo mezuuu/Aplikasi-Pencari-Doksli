@@ -1,9 +1,21 @@
 import axios from 'axios'
 
+// Dynamically use VITE_API_URL if set (production), default to relative /api for local dev proxy
+const apiBase = import.meta.env.VITE_API_URL || ''
+
 const client = axios.create({
-    baseURL: '/api',
+    baseURL: apiBase ? `${apiBase}/api` : '/api',
     timeout: 120000, // 2 min timeout for ML processing
 })
+
+/**
+ * Format relative image URLs to load from the Hugging Face backend in production
+ */
+export const getImageUrl = (url) => {
+    if (!url) return ''
+    if (url.startsWith('http://') || url.startsWith('https://')) return url
+    return apiBase ? `${apiBase}${url}` : url
+}
 
 /**
  * Upload image for search (privacy analysis + similarity search)

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import ImageUpload from '../components/ImageUpload'
 import PrivacyBadge from '../components/PrivacyBadge'
 import ResultCard from '../components/ResultCard'
-import { searchImage } from '../api/client'
+import { searchImage, getImageUrl } from '../api/client'
 
 export default function SearchPage() {
     const navigate = useNavigate()
@@ -63,7 +63,7 @@ export default function SearchPage() {
     )
 
     // Fallback for preview URL if returning from details page (no selectedFile)
-    const displayPreviewUrl = queryPreviewUrl || searchData?.query_image_url
+    const displayPreviewUrl = queryPreviewUrl || getImageUrl(searchData?.query_image_url)
 
     return (
         <div className="space-y-6">
@@ -149,7 +149,7 @@ export default function SearchPage() {
                                     </p>
                                     <div className="w-full aspect-square bg-black/5 dark:bg-white/5 rounded-xl overflow-hidden flex items-center justify-center">
                                         <img
-                                            src={bestMatch.matched_image_url}
+                                            src={getImageUrl(bestMatch.matched_image_url)}
                                             alt="Dokumen asli yang cocok"
                                             className="w-full h-full object-contain"
                                         />

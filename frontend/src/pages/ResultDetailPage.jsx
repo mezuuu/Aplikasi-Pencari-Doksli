@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import PrivacyBadge from '../components/PrivacyBadge'
 import ResultCard from '../components/ResultCard'
-import { getResultDetail } from '../api/client'
+import { getResultDetail, getImageUrl } from '../api/client'
 
 export default function ResultDetailPage() {
     const { searchId } = useParams()
@@ -161,7 +161,7 @@ export default function ResultDetailPage() {
                                 </div>
                                 <div className="bg-black/50 rounded-xl border border-white/10 overflow-hidden flex items-center justify-center min-h-[300px]">
                                     <img 
-                                        src={data.query_image_url} 
+                                        src={getImageUrl(data.query_image_url)} 
                                         alt="Query Image" 
                                         className="max-w-full max-h-[60vh] object-contain"
                                     />
@@ -182,7 +182,7 @@ export default function ResultDetailPage() {
                                 </div>
                                 <div className="bg-black/50 rounded-xl border border-white/10 overflow-hidden flex items-center justify-center min-h-[300px]">
                                     <img 
-                                        src={selectedMatch.matched_image_url} 
+                                        src={getImageUrl(selectedMatch.matched_image_url)} 
                                         alt="Matched Document" 
                                         className="max-w-full max-h-[60vh] object-contain"
                                     />
