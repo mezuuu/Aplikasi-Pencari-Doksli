@@ -94,7 +94,7 @@ export default function AdminPage() {
             if (err.response?.status === 409) {
                 setUploadResult(errData)
             } else {
-                setError(errData?.error || 'Gagal mengunggah dokumen.')
+                setError(errData?.error || errData?.detail || 'Gagal mengunggah dokumen.')
             }
         } finally {
             setUploading(false)

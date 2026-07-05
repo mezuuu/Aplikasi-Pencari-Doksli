@@ -16,4 +16,7 @@ export default defineConfig({
             },
         },
     },
+    build: {
+        sourcemap: false, // Memastikan source code tidak terbaca di production
+    },
 })

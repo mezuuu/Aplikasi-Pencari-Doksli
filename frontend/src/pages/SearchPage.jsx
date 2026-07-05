@@ -46,7 +46,7 @@ export default function SearchPage() {
                 setResult(errData)
                 sessionStorage.setItem('lastSearchResult', JSON.stringify(errData))
             } else {
-                setError(errData?.error || 'Terjadi kesalahan saat menganalisis gambar.')
+                setError(errData?.error || errData?.detail || 'Terjadi kesalahan saat menganalisis gambar.')
             }
         } finally {
             setLoading(false)

@@ -2,9 +2,11 @@
 .env
 backend/.env
 
-# Credentials
+# Credentials & Secret Keys
 backend/doksli-*.json
 *.pem
+*.key
+*.p12
 
 # Python
 __pycache__/
@@ -14,10 +16,28 @@ __pycache__/
 venv/
 env/
 
-# Media
+# Media & Uploads
 backend/media/
 
-# Node
+# Database dumps (sensitive data)
+backend/db_backup.json
+backend/db_dump.sql
+backend/db.sqlite3
+
+# Debug / test / scratch files
+backend/lens_debug.html
+backend/test_ocr_error.txt
+backend/test_gemini.py
+backend/test_lens.py
+backend/test_scoring.py
+backend/test_script.py
+backend/test_yandex_direct.py
+ddos_test.py
+
+# Node & Build
 node_modules/
 dist/
 build/
+
+# Django static collected files
+backend/staticfiles/

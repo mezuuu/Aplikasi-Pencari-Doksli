@@ -13,7 +13,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-dev-key-change-in-production')
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = ['*']
+# Di production, isi dengan domain asli (contoh: 'api-kamu.hf.space')
+# Di development, biarkan '*' atau 'localhost'
+ALLOWED_HOSTS_RAW = os.getenv('ALLOWED_HOSTS', '*')
+ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS_RAW.split(',')]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -96,6 +99,7 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'  # Untuk perintah 'collectstatic'
 
 # Media files (uploads)
 MEDIA_URL = '/media/'
@@ -104,21 +108,47 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS
+# Tambahkan domain production frontend di sini atau lewat env variable CORS_ORIGINS
+_CORS_ORIGINS_RAW = os.getenv('CORS_ORIGINS', '')
+_EXTRA_ORIGINS = [o.strip() for o in _CORS_ORIGINS_RAW.split(',') if o.strip()]
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
-]
+] + _EXTRA_ORIGINS
+
+# Hanya izinkan semua origin jika sedang dalam mode DEBUG (development)
 CORS_ALLOW_ALL_ORIGINS = DEBUG
+
+# Security headers (aktif di production)
+if not DEBUG:
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 
 # REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+    # Di production: sembunyikan Browsable API, hanya tampilkan JSON
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
-        'rest_framework.renderers.BrowsableAPIRenderer',
+    ] + (['rest_framework.renderers.BrowsableAPIRenderer'] if DEBUG else []),
+    # Rate Limiting: mencegah spam & DDoS Level 7
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
     ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': os.getenv('THROTTLE_ANON', '30/minute'),    # 30 req/menit per IP anonim
+        'user': os.getenv('THROTTLE_USER', '100/minute'),   # 100 req/menit per user terautentikasi
+    },
 }
+
+# Admin credentials — ambil dari environment variable, bukan hardcode!
+ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
+ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')
 
 # Google Cloud Vision API
 GOOGLE_CLOUD_API_KEY = os.getenv('GOOGLE_CLOUD_API_KEY', '')
