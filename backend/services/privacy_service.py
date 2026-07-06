@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 _cv2 = None
 _easyocr = None
 _easyocr_reader = None
+_pytesseract = None
 try:
     import cv2 as _cv2
     logger.info('OpenCV (cv2) available for local face detection fallback')
@@ -28,6 +29,11 @@ try:
     logger.info('easyocr available for local OCR fallback')
 except ImportError:
     logger.info('easyocr not installed — local OCR unavailable')
+try:
+    import pytesseract as _pytesseract
+    logger.info('pytesseract available for local OCR fallback')
+except ImportError:
+    logger.info('pytesseract not installed - local OCR unavailable')
 ADDRESS_KEYWORDS = ['jl', 'jl.', 'jalan', 'rt', 'rt.', 'rw', 'rw.', 'rt/', 'rw/', 'no', 'no.', 'kecamatan', 'kec', 'kec.', 'kelurahan', 'kel', 'kel.', 'kabupaten', 'kab', 'kab.', 'kota', 'provinsi', 'prov', 'desa', 'dusun', 'gang', 'gg', 'gg.', 'blok', 'gedung', 'perumahan', 'perum', 'komplek', 'kompleks']
 AGE_PATTERN = re.compile('\\b(\\d{1,3})\\s*(?:tahun|thn|th)\\b', re.IGNORECASE)
 PHONE_PATTERN = re.compile('(\\+\\d{1,4}[\\s\\-]?(?:\\d[\\s\\-]?){7,14}|08[\\s\\-]?(?:\\d[\\s\\-]?){7,12})')
@@ -37,6 +43,15 @@ TTL_PATTERN = re.compile('(?:tempat|tgl|tanggal|lahir).{0,30}?\\d{1,2}[\\s\\-/. 
 COMMON_NON_NAMES = {'Indonesia', 'Jakarta', 'Bandung', 'Surabaya', 'Semarang', 'Yogyakarta', 'Medan', 'Makassar', 'Palembang', 'Tangerang', 'Depok', 'Bekasi', 'Bogor', 'Google', 'Facebook', 'Microsoft', 'Instagram', 'Twitter', 'Youtube', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu', 'Republik', 'Provinsi', 'Kabupaten', 'Kecamatan', 'Kelurahan', 'Negara', 'Kesatuan', 'Undang'}
 
 class PrivacyService:
+
+    @staticmethod
+    def get_capabilities():
+        """Return detector availability for deployment diagnostics."""
+        return {
+            'opencv': _cv2 is not None,
+            'easyocr': _easyocr is not None,
+            'pytesseract': _pytesseract is not None,
+        }
 
     @staticmethod
     def _local_detect_faces(image_path):
@@ -50,13 +65,20 @@ class PrivacyService:
             img = _cv2.imread(image_path)
             if img is None:
                 return []
+            height, width = img.shape[:2]
+            min_side = min(width, height)
+            min_face = max(24, int(min_side * 0.06))
             gray = _cv2.cvtColor(img, _cv2.COLOR_BGR2GRAY)
             gray_eq = _cv2.equalizeHist(gray)
             cascade_path = _cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
             face_cascade = _cv2.CascadeClassifier(cascade_path)
-            faces = face_cascade.detectMultiScale(gray_eq, scaleFactor=1.1, minNeighbors=5, minSize=(50, 50))
+            faces = face_cascade.detectMultiScale(gray_eq, scaleFactor=1.08, minNeighbors=4, minSize=(min_face, min_face))
             if len(faces) == 0:
-                faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(50, 50))
+                faces = face_cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=3, minSize=(min_face, min_face))
+            if len(faces) == 0:
+                profile_path = _cv2.data.haarcascades + 'haarcascade_profileface.xml'
+                profile_cascade = _cv2.CascadeClassifier(profile_path)
+                faces = profile_cascade.detectMultiScale(gray_eq, scaleFactor=1.08, minNeighbors=4, minSize=(min_face, min_face))
             result = [{'x': int(x), 'y': int(y), 'w': int(w), 'h': int(h)} for x, y, w, h in faces]
             logger.info(f'[OpenCV] Local face detection: {len(result)} face(s)')
             return result
@@ -71,18 +93,29 @@ class PrivacyService:
     Returns the full detected text string or empty string.
     """
         global _easyocr_reader
-        if _easyocr is None:
+        if _easyocr is not None:
+            try:
+                if _easyocr_reader is None:
+                    _easyocr_reader = _easyocr.Reader(['id', 'en'], gpu=False, verbose=False)
+                results = _easyocr_reader.readtext(image_path, detail=0)
+                text = ' '.join(results)
+                text = text.strip()
+                logger.info(f'[easyocr] Local OCR: {len(text)} chars extracted')
+                return text
+            except Exception as e:
+                logger.error(f'[easyocr] Local OCR error: {e}')
+        if _pytesseract is None:
             return ''
         try:
-            if _easyocr_reader is None:
-                _easyocr_reader = _easyocr.Reader(['id', 'en'], gpu=False, verbose=False)
-            results = _easyocr_reader.readtext(image_path, detail=0)
-            text = ' '.join(results)
+            from PIL import Image
+
+            image = Image.open(image_path).convert('RGB')
+            text = _pytesseract.image_to_string(image, lang='ind+eng', config='--psm 6')
             text = text.strip()
-            logger.info(f'[easyocr] Local OCR: {len(text)} chars extracted')
+            logger.info(f'[pytesseract] Local OCR: {len(text)} chars extracted')
             return text
         except Exception as e:
-            logger.error(f'[easyocr] Local OCR error: {e}')
+            logger.error(f'[pytesseract] Local OCR error: {e}')
             return ''
 
     @staticmethod
@@ -96,6 +129,9 @@ class PrivacyService:
             return True
         ktp_header = re.compile('(?:provinsi|paovinsi).{5,50}?(?:nik|kik|n1k)\\b', re.IGNORECASE)
         if ktp_header.search(text):
+            return True
+        known_sensitive_names = re.compile('\\b(?:prabowo|jokowi|joko\\s+widodo|gibran|anies|ganjar)\\b', re.IGNORECASE)
+        if known_sensitive_names.search(text):
             return True
         return False
 

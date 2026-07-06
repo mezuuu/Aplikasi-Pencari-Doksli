@@ -10,6 +10,9 @@ ENV PORT=7860
 RUN apt-get update && apt-get install -y \
     libgl1 \
     libglib2.0-0 \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    tesseract-ocr-ind \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory

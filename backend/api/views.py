@@ -29,10 +29,13 @@ class HealthCheckView(APIView):
 
     def get(self, request):
         original_count = OriginalDocument.objects.count()
+        from services.privacy_service import PrivacyService
         return Response({
             'status': 'ok',
             'service': 'pencari-doksli-api',
             'original_count': original_count,
+            'google_vision_api_configured': bool(settings.GOOGLE_CLOUD_API_KEY),
+            'privacy_detectors': PrivacyService.get_capabilities(),
         }, status=status.HTTP_200_OK)
 
 class FileHelper:
