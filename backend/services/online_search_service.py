@@ -444,8 +444,14 @@ class OnlineSearchService:
                 logger.debug('[Online Search] Gemini search service not available')
             except Exception as e:
                 logger.warning(f'[Online Search] Gemini analysis failed: {e}')
-        remaining_needed = max_candidates - len(all_url_candidates) - len(direct_candidates)
-        if remaining_needed > 0 and (not all_url_candidates):
+        if all_url_candidates:
+            remaining_needed = max_candidates - len(direct_candidates)
+            if remaining_needed > 0:
+                downloaded = OnlineSearchService._download_candidate_images(all_url_candidates, remaining_needed)
+                direct_candidates.extend(downloaded)
+
+        remaining_needed = max_candidates - len(direct_candidates)
+        if remaining_needed > 0:
             if gemini_keywords:
                 keywords = gemini_keywords
                 search_source_label = 'gemini+bing'
@@ -462,11 +468,6 @@ class OnlineSearchService:
                     if result['search_source'] == 'none':
                         result['search_source'] = search_source_label
                     logger.info(f'[Online Search] Bing downloaded {len(bing_candidates)} candidates')
-        if all_url_candidates:
-            remaining_needed = max_candidates - len(direct_candidates)
-            if remaining_needed > 0:
-                downloaded = OnlineSearchService._download_candidate_images(all_url_candidates, remaining_needed)
-                direct_candidates.extend(downloaded)
         result['candidates'] = direct_candidates[:max_candidates]
         result['total_urls_found'] = len(all_url_candidates) + len(direct_candidates)
         logger.info(f"[Online Search] Complete: {len(result['candidates'])} candidates from {result['search_source']}")

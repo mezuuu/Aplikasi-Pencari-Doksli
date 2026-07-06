@@ -174,7 +174,7 @@ export default function SearchPage() {
                                 </span>
                             </div>
                             <div className="space-y-3">
-                                {results.slice(0, 3).map((r) => (
+                                {results.slice(0, 10).map((r) => (
                                     <ResultCard 
                                         key={r.id} 
                                         result={r} 

@@ -2,6 +2,8 @@
 DRF Serializers for the Image Detection API.
 """
 
+import base64
+import mimetypes
 import os
 from django.conf import settings
 from rest_framework import serializers
@@ -31,20 +33,36 @@ def _image_path_to_url(image_path):
     return f"{settings.MEDIA_URL}{relative}"
 
 
+def _image_file_to_data_url(image_path):
+    if not image_path:
+        return None
+    path_str = str(image_path)
+    if not os.path.exists(path_str):
+        return None
+    mime_type, _ = mimetypes.guess_type(path_str)
+    if not mime_type or not mime_type.startswith('image/'):
+        mime_type = 'image/jpeg'
+    with open(path_str, 'rb') as f:
+        image_data = base64.b64encode(f.read()).decode('ascii')
+    return f"data:{mime_type};base64,{image_data}"
+
+
 def _document_image_url(obj):
     if not obj:
         return None
-
-    image_path = getattr(obj, 'image_path', None)
-    if image_path:
-        path_str = str(image_path)
-        if os.path.exists(path_str):
-            return _image_path_to_url(path_str)
 
     image_data = getattr(obj, 'image_data', None)
     if image_data:
         mime_type = getattr(obj, 'image_mime_type', 'image/jpeg') or 'image/jpeg'
         return f"data:{mime_type};base64,{image_data}"
+
+    image_path = getattr(obj, 'image_path', None)
+    if image_path:
+        path_str = str(image_path)
+        if os.path.exists(path_str):
+            data_url = _image_file_to_data_url(path_str)
+            if data_url:
+                return data_url
 
     return _image_path_to_url(image_path)
 
@@ -114,6 +132,9 @@ class SearchResultSerializer(serializers.ModelSerializer):
         
         # Priority 2: web candidate stored locally
         if obj.matched_image_path:
+            data_url = _image_file_to_data_url(obj.matched_image_path)
+            if data_url:
+                return data_url
             return _image_path_to_url(obj.matched_image_path)
         
         # Priority 3: external direct URL (for non-permanent storage)

@@ -2,6 +2,8 @@ import os
 import shutil
 import uuid
 import hashlib
+import base64
+import mimetypes
 from django.core.management.base import BaseCommand
 from django.conf import settings
 from api.models import OriginalDocument
@@ -13,6 +15,14 @@ def _compute_file_hash(filepath):
         for chunk in iter(lambda: f.read(8192), b''):
             sha256.update(chunk)
     return sha256.hexdigest()
+
+def _encode_image_data(filepath):
+    mime_type, _ = mimetypes.guess_type(filepath)
+    if not mime_type or not mime_type.startswith('image/'):
+        mime_type = 'image/jpeg'
+    with open(filepath, 'rb') as f:
+        image_data = base64.b64encode(f.read()).decode('ascii')
+    return image_data, mime_type
 
 class Command(BaseCommand):
     help = 'Bulk import Original Documents (Doksli) from a directory'
@@ -48,7 +58,14 @@ class Command(BaseCommand):
                         shutil.copy2(source_path, dest_path)
                         self.stdout.write(f'Extracting embedding for {filename}...')
                         embedding = EmbeddingService.extract_embedding(dest_path)
-                        OriginalDocument.objects.create(image_path=dest_path, embedding_vector=embedding, file_hash=file_hash)
+                        image_data, image_mime_type = _encode_image_data(dest_path)
+                        OriginalDocument.objects.create(
+                            image_path=dest_path,
+                            image_data=image_data,
+                            image_mime_type=image_mime_type,
+                            embedding_vector=embedding,
+                            file_hash=file_hash,
+                        )
                         self.stdout.write(self.style.SUCCESS(f'Successfully imported: {filename}'))
                         success_count += 1
                     except Exception as e:

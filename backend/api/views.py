@@ -125,13 +125,15 @@ class SearchImageView(APIView):
             from services.embedding_service import EmbeddingService
             query_embedding = EmbeddingService.extract_embedding(filepath)
             from services.similarity_service import SimilarityService
+            local_limit = getattr(settings, 'LOCAL_RESULTS_LIMIT', 3)
+            web_default_limit = getattr(settings, 'WEB_RESULTS_LIMIT', 7)
+            web_incomplete_limit = getattr(settings, 'WEB_RESULTS_LIMIT_WHEN_LOCAL_INCOMPLETE', 10)
             local_original_count = OriginalDocument.objects.count()
             local_matches = []
             if local_original_count:
                 local_candidates = SimilarityService.find_candidate_pool(query_embedding)
                 local_candidates = SimilarityService.re_rank_local_candidates(filepath, local_candidates)
-                top_k = getattr(settings, 'SIMILARITY_TOP_K', 5)
-                local_matches = SimilarityService.filter_reliable_local_matches(local_candidates, top_k=top_k)
+                local_matches = SimilarityService.filter_reliable_local_matches(local_candidates, top_k=local_limit)
                 if local_matches:
                     logger.info(
                         f"Local search accepted {len(local_matches)} match(es). "
@@ -144,15 +146,13 @@ class SearchImageView(APIView):
                     )
             else:
                 logger.warning('Local search skipped because original document database is empty.')
-            for match in local_matches:
-                SearchResult.objects.create(search=search_query, source_type='local', matched_document=match['document'], similarity_score=match['score'])
             crop_paths = []
-            if not local_matches:
+            if len(local_matches) < local_limit:
                 try:
                     from services.cropping_service import CroppingService
                     crop_paths = CroppingService.generate_crop_regions(filepath)
                     if crop_paths:
-                        logger.info(f'Full-image search found no matches. Trying {len(crop_paths)} sub-region crops...')
+                        logger.info(f'Local search has {len(local_matches)}/{local_limit} reliable match(es). Trying {len(crop_paths)} sub-region crops...')
                         best_crop_matches = []
                         for crop_path in crop_paths:
                             try:
@@ -165,16 +165,16 @@ class SearchImageView(APIView):
                                 continue
                         if best_crop_matches:
                             seen = {}
+                            for match in local_matches:
+                                doc_id = str(match['document'].id)
+                                seen[doc_id] = match
                             for match in best_crop_matches:
                                 doc_id = str(match['document'].id)
                                 if doc_id not in seen or match['score'] > seen[doc_id]['score']:
                                     seen[doc_id] = match
                             best_crop_matches = sorted(seen.values(), key=lambda x: x['score'], reverse=True)
                             best_crop_matches = SimilarityService.re_rank_local_candidates(filepath, best_crop_matches)
-                            top_k = getattr(settings, 'SIMILARITY_TOP_K', 5)
-                            best_crop_matches = SimilarityService.filter_reliable_local_matches(best_crop_matches, top_k=top_k)
-                            for match in best_crop_matches:
-                                SearchResult.objects.create(search=search_query, source_type='local', matched_document=match['document'], similarity_score=match['score'])
+                            best_crop_matches = SimilarityService.filter_reliable_local_matches(best_crop_matches, top_k=local_limit)
                             local_matches = best_crop_matches
                             if local_matches:
                                 logger.info(f"Sub-region search found {len(local_matches)} match(es). Best score: {local_matches[0]['score']}")
@@ -189,61 +189,104 @@ class SearchImageView(APIView):
                             CroppingService.cleanup_crops(crop_paths)
                         except Exception:
                             pass
+            for match in local_matches[:local_limit]:
+                SearchResult.objects.create(search=search_query, source_type='local', matched_document=match['document'], similarity_score=match['score'])
             web_candidates = []
-            if not local_matches:
-                try:
-                    from services.online_search_service import OnlineSearchService
-                    from services.similarity_service import SimilarityService
-                    logger.info('No local matches found. Starting modular online search...')
-                    online_result = OnlineSearchService.search_online(filepath, max_candidates=10)
-                    web_candidates = online_result.get('candidates', [])
-                    search_source = online_result.get('search_source', 'none')
-                    search_query.search_source = _db_web_source(search_source)
-                    search_query.save(update_fields=['search_source'])
-                    if web_candidates:
-                        ranked_web = SimilarityService.re_rank_web_candidates(filepath, query_embedding, web_candidates)
-                        online_threshold = getattr(settings, 'ONLINE_MATCH_THRESHOLD', 0.65)
-                        ranked_web = [
-                            ranked for ranked in ranked_web
-                            if ranked.get('score', 0) >= online_threshold
-                        ]
-                        db_source_type = _db_web_source(search_source)
-                        for ranked in ranked_web:
-                            SearchResult.objects.create(search=search_query, source_type=db_source_type, matched_image_path='', external_url=ranked.get('url', ''), similarity_score=ranked['score'])
-                        from services.online_search_service import OnlineSearchService
-                        OnlineSearchService.cleanup_candidates(web_candidates)
-                        logger.info(
-                            f'Online search accepted {len(ranked_web)} candidate(s) '
-                            f'above threshold {online_threshold} (source: {search_source})'
-                        )
-                    elif online_result.get('google_web_results'):
-                        web_results = online_result['google_web_results']
-                        all_web_urls = []
-                        online_threshold = getattr(settings, 'ONLINE_MATCH_THRESHOLD', 0.65)
-                        for img in web_results.get('full_matching_images', []):
-                            all_web_urls.append((img['url'], img.get('score', 0.9)))
-                        for img in web_results.get('partial_matching_images', []):
-                            all_web_urls.append((img['url'], img.get('score', 0.7)))
-                        for img in web_results.get('visually_similar_images', []):
-                            all_web_urls.append((img['url'], img.get('score', 0.5)))
-                        for url, score in all_web_urls[:20]:
-                            if score < online_threshold:
+            web_results_created = 0
+            web_limit = web_default_limit if len(local_matches) >= local_limit else web_incomplete_limit
+            search_source = 'none'
+            try:
+                from services.online_search_service import OnlineSearchService
+                from services.similarity_service import SimilarityService
+                logger.info(
+                    f'Starting online search with limit={web_limit} '
+                    f'(local reliable={len(local_matches)}/{local_limit}).'
+                )
+                online_result = OnlineSearchService.search_online(filepath, max_candidates=web_limit)
+                web_candidates = online_result.get('candidates', [])
+                search_source = online_result.get('search_source', 'none')
+                if web_candidates:
+                    ranked_all = SimilarityService.re_rank_web_candidates(filepath, query_embedding, web_candidates)
+                    online_threshold = getattr(settings, 'ONLINE_MATCH_THRESHOLD', 0.65)
+                    fallback_min = getattr(settings, 'ONLINE_FALLBACK_MIN_SCORE', 0.35)
+                    ranked_web = [
+                        ranked for ranked in ranked_all
+                        if ranked.get('score', 0) >= online_threshold
+                    ]
+                    if len(ranked_web) < web_limit:
+                        seen_paths = {ranked.get('path') for ranked in ranked_web}
+                        seen_urls = {ranked.get('url') for ranked in ranked_web}
+                        for ranked in ranked_all:
+                            if len(ranked_web) >= web_limit:
+                                break
+                            if ranked.get('path') in seen_paths or ranked.get('url') in seen_urls:
                                 continue
-                            SearchResult.objects.create(search=search_query, source_type='google', external_url=url, similarity_score=score)
-                        search_query.search_source = 'google'
-                        search_query.save(update_fields=['search_source'])
-                except Exception as e:
-                    logger.error(f'Online search failed: {e}', exc_info=True)
-                finally:
-                    for candidate in web_candidates:
-                        src = candidate.get('path', '')
-                        if src and os.path.exists(src):
-                            try:
-                                os.remove(src)
-                            except Exception:
-                                pass
-            else:
+                            if ranked.get('score', 0) >= fallback_min:
+                                ranked_web.append(ranked)
+                                seen_paths.add(ranked.get('path'))
+                                seen_urls.add(ranked.get('url'))
+                    ranked_web = ranked_web[:web_limit]
+                    db_source_type = _db_web_source(search_source)
+                    kept_paths = set()
+                    for ranked in ranked_web:
+                        url = ranked.get('url', '')
+                        path = ranked.get('path', '')
+                        external_url = url if str(url).startswith(('http://', 'https://')) else ''
+                        SearchResult.objects.create(
+                            search=search_query,
+                            source_type=db_source_type,
+                            matched_image_path=path,
+                            external_url=external_url,
+                            similarity_score=ranked['score']
+                        )
+                        web_results_created += 1
+                        if path:
+                            kept_paths.add(path)
+                    cleanup_candidates = [
+                        candidate for candidate in web_candidates
+                        if candidate.get('path') not in kept_paths
+                    ]
+                    OnlineSearchService.cleanup_candidates(cleanup_candidates)
+                    logger.info(
+                        f'Online search accepted {web_results_created}/{web_limit} candidate(s) '
+                        f'(source={search_source}, threshold={online_threshold}, fallback_min={fallback_min})'
+                    )
+                elif online_result.get('google_web_results'):
+                    web_results = online_result['google_web_results']
+                    all_web_urls = []
+                    online_threshold = getattr(settings, 'ONLINE_MATCH_THRESHOLD', 0.65)
+                    for img in web_results.get('full_matching_images', []):
+                        all_web_urls.append((img['url'], img.get('score', 0.9)))
+                    for img in web_results.get('partial_matching_images', []):
+                        all_web_urls.append((img['url'], img.get('score', 0.7)))
+                    for img in web_results.get('visually_similar_images', []):
+                        all_web_urls.append((img['url'], img.get('score', 0.5)))
+                    for url, score in all_web_urls[:web_limit]:
+                        if score < online_threshold:
+                            continue
+                        SearchResult.objects.create(search=search_query, source_type='google', external_url=url, similarity_score=score)
+                        web_results_created += 1
+            except Exception as e:
+                logger.error(f'Online search failed: {e}', exc_info=True)
+            finally:
+                for candidate in web_candidates:
+                    src = candidate.get('path', '')
+                    if src and os.path.exists(src):
+                        linked = SearchResult.objects.filter(search=search_query, matched_image_path=src).exists()
+                        if linked:
+                            continue
+                        try:
+                            os.remove(src)
+                        except Exception:
+                            pass
+            if local_matches and web_results_created:
+                search_query.search_source = 'both'
+                search_query.save(update_fields=['search_source'])
+            elif local_matches:
                 search_query.search_source = 'local'
+                search_query.save(update_fields=['search_source'])
+            elif web_results_created or search_source != 'none':
+                search_query.search_source = _db_web_source(search_source)
                 search_query.save(update_fields=['search_source'])
             try:
                 from services.forensic_service import ForensicService

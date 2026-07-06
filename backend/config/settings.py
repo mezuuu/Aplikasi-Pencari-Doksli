@@ -183,6 +183,11 @@ LOCAL_ORB_THRESHOLD = 0.08    # Structural keypoint evidence for local matches
 LOCAL_STRONG_PHASH_THRESHOLD = 0.90
 LOCAL_STRONG_ORB_THRESHOLD = 0.18
 ONLINE_MATCH_THRESHOLD = 0.65 # Minimum web score to show as a candidate
+ONLINE_FALLBACK_MIN_SCORE = 0.35
+LOCAL_RESULTS_LIMIT = 3
+WEB_RESULTS_LIMIT = 7
+WEB_RESULTS_LIMIT_WHEN_LOCAL_INCOMPLETE = 10
+SEARCH_RESULTS_LIMIT = 10
 SIMILARITY_TOP_K = 5          # Maximum results to return
 PRIVACY_FLAG_THRESHOLD = int(os.getenv('PRIVACY_FLAG_THRESHOLD', '3'))  # Block if >= N privacy flags detected
 
