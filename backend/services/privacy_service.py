@@ -237,21 +237,7 @@ class PrivacyService:
         ktp_header = re.compile('(?:provinsi|paovinsi).{5,50}?(?:nik|kik|n1k)\\b', re.IGNORECASE)
         if ktp_header.search(normalized):
             return True
-        if PrivacyService._contains_known_sensitive_name(normalized):
-            return True
         return False
-
-    @staticmethod
-    def _contains_known_sensitive_name(text):
-        """Detect common public/person names even with OCR character noise."""
-        normalized = PrivacyService._normalize_ocr_text(text)
-        known_sensitive_names = re.compile('\\b(?:prabowo|jokowi|joko\\s+widodo|gibran|anies|ganjar|subianto|widodo)\\b', re.IGNORECASE)
-        if known_sensitive_names.search(normalized):
-            return True
-        compact = re.sub(r'[^a-z0-9]', '', str(text or '').lower())
-        compact = compact.translate(str.maketrans({'0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't'}))
-        fuzzy_names = ('prabowo', 'jokowi', 'jokowidodo', 'jokowidododo', 'gibran', 'anies', 'ganjar', 'subianto', 'widodo')
-        return any(name in compact for name in fuzzy_names)
 
     @staticmethod
     def _normalize_ocr_text(text):
@@ -283,17 +269,23 @@ class PrivacyService:
 
     @staticmethod
     def _detect_address_in_text(text):
-        """Detect Indonesian address patterns using keyword matching."""
+        """Detect detailed Indonesian address patterns using component categories."""
         if not text:
             return False
-        address_pattern_strict = re.compile('\\b(jl|rt|rw|no|kec|kel|kab|prov|gg)\\b', re.IGNORECASE)
-        address_pattern_loose = re.compile('\\b(jalan|kecamatan|kelurahan|kabupaten|kota|provinsi|paovinsi|desa|dusun|gang|blok|gedung|perumahan|perum|kompleks?)', re.IGNORECASE)
-        matches = address_pattern_strict.findall(text) + address_pattern_loose.findall(text)
-        unique_keywords = set([m.lower() for m in matches])
-        if len(unique_keywords) >= 2:
-            return True
-        rt_rw_pattern = re.compile('\\brt\\s*\\.?\\s*\\d+\\s*/\\s*rw\\s*\\.?\\s*\\d+', re.IGNORECASE)
-        if rt_rw_pattern.search(text):
+        normalized = PrivacyService._normalize_ocr_text(text).lower()
+        components = set()
+        component_patterns = {
+            'street': r'\b(?:jl\.?|jalan|gang|gg\.?|blok|kompleks?|komplek|perumahan|perum)\b',
+            'neighborhood': r'\b(?:rt\.?\s*\d+|rw\.?\s*\d+|rt\s*/\s*rw|rt\s*\d+\s*/\s*rw\s*\d+)\b',
+            'village': r'\b(?:desa|kelurahan|kel\.?)\b',
+            'district': r'\b(?:kecamatan|kec\.?)\b',
+            'regency_city': r'\b(?:kabupaten|kab\.?|kota)\b',
+            'province': r'\b(?:provinsi|paovinsi|prov\.?)\b',
+        }
+        for component, pattern in component_patterns.items():
+            if re.search(pattern, normalized, re.IGNORECASE):
+                components.add(component)
+        if len(components) >= 2:
             return True
         return False
 
@@ -357,9 +349,6 @@ class PrivacyService:
             result['age_detected'] = PrivacyService._detect_age_in_text(detected_text)
             result['address_detected'] = PrivacyService._detect_address_in_text(detected_text)
             result['phone_detected'] = PrivacyService._detect_phone_in_text(detected_text)
-            if not result['face_detected'] and result['name_detected'] and PrivacyService._contains_known_sensitive_name(detected_text):
-                result['face_detected'] = True
-                logger.info('[Privacy] Inferred face/person presence from known public figure name in OCR text')
         flags = [result['face_detected'], result['name_detected'], result['age_detected'], result['address_detected'], result['phone_detected']]
         result['total_flags'] = sum(flags)
         result['is_blocked'] = result['total_flags'] >= threshold
