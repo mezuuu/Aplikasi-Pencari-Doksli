@@ -198,7 +198,7 @@ class SearchImageView(APIView):
             try:
                 from services.online_search_service import OnlineSearchService
                 from services.similarity_service import SimilarityService
-                online_fetch_limit = web_limit
+                online_fetch_limit = min(web_limit + 5, 20)
                 logger.info(
                     f'Starting online search with limit={web_limit} '
                     f'fetch={online_fetch_limit} '

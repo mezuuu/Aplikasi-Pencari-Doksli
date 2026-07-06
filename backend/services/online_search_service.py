@@ -27,8 +27,8 @@ import requests
 from django.conf import settings as django_settings
 logger = logging.getLogger(__name__)
 MAX_CANDIDATES = 20
-DOWNLOAD_TIMEOUT = 10
-SEARCH_TIMEOUT = 30
+DOWNLOAD_TIMEOUT = 6
+SEARCH_TIMEOUT = 15
 MIN_IMAGE_SIZE = 5000
 MAX_IMAGE_SIZE = 10000000
 _google_vision_failed = False
