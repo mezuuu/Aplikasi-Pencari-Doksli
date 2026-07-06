@@ -67,11 +67,35 @@ class PrivacyService:
     def _has_haar_face_cascade():
         if _cv2 is None:
             return False
-        cascade_path = os.path.join(_cv2.data.haarcascades, 'haarcascade_frontalface_default.xml')
-        if not os.path.exists(cascade_path):
+        cascade_path = PrivacyService._get_haar_cascade_path('haarcascade_frontalface_default.xml')
+        if not cascade_path:
             return False
         cascade = _cv2.CascadeClassifier(cascade_path)
         return not cascade.empty()
+
+    @staticmethod
+    def _get_haar_cascade_path(cascade_name):
+        """Resolve Haar cascade from OpenCV data path or bundled deployment models."""
+        candidate_paths = [
+            os.path.join(getattr(_cv2.data, 'haarcascades', ''), cascade_name),
+            os.path.join(settings.BASE_DIR, 'models', cascade_name),
+        ]
+        for cascade_path in candidate_paths:
+            if cascade_path and os.path.exists(cascade_path):
+                return cascade_path
+        return None
+
+    @staticmethod
+    def _load_haar_cascade(cascade_name):
+        cascade_path = PrivacyService._get_haar_cascade_path(cascade_name)
+        if not cascade_path:
+            logger.warning(f'[OpenCV] Haar cascade missing: {cascade_name}')
+            return None
+        cascade = _cv2.CascadeClassifier(cascade_path)
+        if cascade.empty():
+            logger.warning(f'[OpenCV] Haar cascade could not be loaded: {cascade_name}')
+            return None
+        return cascade
 
     @staticmethod
     def _local_detect_faces(image_path):
@@ -110,13 +134,8 @@ class PrivacyService:
         ]
         cascades = []
         for cascade_name in cascade_names:
-            cascade_path = os.path.join(_cv2.data.haarcascades, cascade_name)
-            if not os.path.exists(cascade_path):
-                logger.warning(f'[OpenCV] Haar cascade missing: {cascade_name}')
-                continue
-            cascade = _cv2.CascadeClassifier(cascade_path)
-            if cascade.empty():
-                logger.warning(f'[OpenCV] Haar cascade could not be loaded: {cascade_name}')
+            cascade = PrivacyService._load_haar_cascade(cascade_name)
+            if cascade is None:
                 continue
             cascades.append((cascade_name, cascade))
 

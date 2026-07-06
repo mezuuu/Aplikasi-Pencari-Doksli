@@ -25,7 +25,13 @@ RUN mkdir -p /app/models && \
     wget -q -O /app/models/deploy.prototxt \
         https://raw.githubusercontent.com/opencv/opencv/master/samples/dnn/face_detector/deploy.prototxt && \
     wget -q -O /app/models/res10_300x300_ssd_iter_140000.caffemodel \
-        https://github.com/opencv/opencv_3rdparty/raw/dnn_samples_face_detector_20170830/res10_300x300_ssd_iter_140000.caffemodel
+        https://github.com/opencv/opencv_3rdparty/raw/dnn_samples_face_detector_20170830/res10_300x300_ssd_iter_140000.caffemodel && \
+    wget -q -O /app/models/haarcascade_frontalface_default.xml \
+        https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml && \
+    wget -q -O /app/models/haarcascade_frontalface_alt2.xml \
+        https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_alt2.xml && \
+    wget -q -O /app/models/haarcascade_profileface.xml \
+        https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_profileface.xml
 
 # Copy requirements dan install
 COPY requirements.txt /app/
