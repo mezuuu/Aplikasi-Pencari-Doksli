@@ -180,7 +180,7 @@ LOCAL_CANDIDATE_MIN = 0.35    # Wider local pool before visual re-ranking
 LOCAL_MATCH_THRESHOLD = 0.50  # Minimum visual re-ranked local score to accept
 ONLINE_MATCH_THRESHOLD = 0.65 # Minimum web score to show as a candidate
 SIMILARITY_TOP_K = 5          # Maximum results to return
-PRIVACY_FLAG_THRESHOLD = int(os.getenv('PRIVACY_FLAG_THRESHOLD', '3'))  # Block if >= N privacy flags detected
+PRIVACY_FLAG_THRESHOLD = int(os.getenv('PRIVACY_FLAG_THRESHOLD', '2'))  # Block if >= N privacy flags detected
 
 # Sub-region cropping settings (for screenshot analysis)
 CROP_SCALES = [0.5, 0.7]      # Window sizes relative to image dimensions
