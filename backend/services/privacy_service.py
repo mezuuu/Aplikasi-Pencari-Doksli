@@ -13,6 +13,7 @@ If >= 3 categories are flagged, the search is blocked.
 import re
 import logging
 import os
+import tempfile
 from django.conf import settings
 logger = logging.getLogger(__name__)
 _cv2 = None
@@ -49,9 +50,17 @@ class PrivacyService:
         """Return detector availability for deployment diagnostics."""
         return {
             'opencv': _cv2 is not None,
+            'opencv_dnn_face': PrivacyService._has_dnn_face_model(),
             'easyocr': _easyocr is not None,
             'pytesseract': _pytesseract is not None,
         }
+
+    @staticmethod
+    def _has_dnn_face_model():
+        model_dir = os.path.join(settings.BASE_DIR, 'models')
+        proto_path = os.path.join(model_dir, 'deploy.prototxt')
+        model_path = os.path.join(model_dir, 'res10_300x300_ssd_iter_140000.caffemodel')
+        return os.path.exists(proto_path) and os.path.exists(model_path)
 
     @staticmethod
     def _local_detect_faces(image_path):
@@ -65,6 +74,10 @@ class PrivacyService:
             img = _cv2.imread(image_path)
             if img is None:
                 return []
+            dnn_faces = PrivacyService._dnn_detect_faces(img)
+            if dnn_faces:
+                logger.info(f'[OpenCV DNN] Local face detection: {len(dnn_faces)} face(s)')
+                return dnn_faces
             height, width = img.shape[:2]
             min_side = min(width, height)
             min_face = max(24, int(min_side * 0.06))
@@ -84,6 +97,41 @@ class PrivacyService:
             return result
         except Exception as e:
             logger.error(f'[OpenCV] Local face detection error: {e}')
+            return []
+
+    @staticmethod
+    def _dnn_detect_faces(img):
+        """Detect faces using OpenCV's SSD face detector if model files exist."""
+        if _cv2 is None or not PrivacyService._has_dnn_face_model():
+            return []
+        try:
+            model_dir = os.path.join(settings.BASE_DIR, 'models')
+            proto_path = os.path.join(model_dir, 'deploy.prototxt')
+            model_path = os.path.join(model_dir, 'res10_300x300_ssd_iter_140000.caffemodel')
+            net = _cv2.dnn.readNetFromCaffe(proto_path, model_path)
+            height, width = img.shape[:2]
+            blob = _cv2.dnn.blobFromImage(_cv2.resize(img, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0))
+            net.setInput(blob)
+            detections = net.forward()
+            faces = []
+            for i in range(detections.shape[2]):
+                confidence = float(detections[0, 0, i, 2])
+                if confidence < 0.35:
+                    continue
+                box = detections[0, 0, i, 3:7] * [width, height, width, height]
+                x1, y1, x2, y2 = box.astype('int')
+                x1, y1 = max(0, x1), max(0, y1)
+                x2, y2 = min(width, x2), min(height, y2)
+                if x2 <= x1 or y2 <= y1:
+                    continue
+                face_w = x2 - x1
+                face_h = y2 - y1
+                if face_w < 18 or face_h < 18:
+                    continue
+                faces.append({'x': int(x1), 'y': int(y1), 'w': int(face_w), 'h': int(face_h), 'confidence': confidence})
+            return faces
+        except Exception as e:
+            logger.warning(f'[OpenCV DNN] Face detection failed: {e}')
             return []
 
     @staticmethod
@@ -107,33 +155,120 @@ class PrivacyService:
         if _pytesseract is None:
             return ''
         try:
-            from PIL import Image
-
-            image = Image.open(image_path).convert('RGB')
-            text = _pytesseract.image_to_string(image, lang='ind+eng', config='--psm 6')
-            text = text.strip()
-            logger.info(f'[pytesseract] Local OCR: {len(text)} chars extracted')
+            texts = PrivacyService._tesseract_detect_text_variants(image_path)
+            text = PrivacyService._merge_ocr_texts(texts)
+            logger.info(f'[pytesseract] Local OCR: {len(text)} chars extracted from {len(texts)} variant(s)')
             return text
         except Exception as e:
             logger.error(f'[pytesseract] Local OCR error: {e}')
             return ''
 
     @staticmethod
+    def _merge_ocr_texts(texts):
+        """Merge OCR outputs while preserving useful repeated context."""
+        seen = set()
+        lines = []
+        for text in texts:
+            for line in str(text or '').splitlines():
+                cleaned = re.sub(r'\s+', ' ', line).strip()
+                key = cleaned.lower()
+                if cleaned and key not in seen:
+                    seen.add(key)
+                    lines.append(cleaned)
+        return '\n'.join(lines)
+
+    @staticmethod
+    def _tesseract_detect_text_variants(image_path):
+        """
+    Run Tesseract over multiple preprocessed variants.
+
+    Poster/news-card images often use bright text over a dark overlay. A single
+    OCR pass misses those, so we crop likely text bands, upscale, threshold,
+    and invert before OCR.
+    """
+        from PIL import Image, ImageOps, ImageFilter
+
+        image = Image.open(image_path).convert('RGB')
+        width, height = image.size
+        crops = [
+            image,
+            image.crop((0, int(height * 0.45), width, height)),
+            image.crop((0, int(height * 0.30), width, height)),
+        ]
+        variants = []
+        for crop in crops:
+            variants.append(crop)
+            scale = 2 if max(crop.size) >= 900 else 3
+            upscaled = crop.resize((crop.width * scale, crop.height * scale), Image.LANCZOS)
+            gray = ImageOps.grayscale(upscaled)
+            gray = ImageOps.autocontrast(gray).filter(ImageFilter.SHARPEN)
+            variants.append(gray)
+            variants.append(gray.point(lambda p: 255 if p > 150 else 0))
+            variants.append(ImageOps.invert(gray).point(lambda p: 255 if p > 150 else 0))
+
+        texts = []
+        configs = (
+            '--psm 6',
+            '--psm 11',
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for idx, variant in enumerate(variants):
+                variant_path = os.path.join(tmpdir, f'ocr_{idx}.png')
+                variant.save(variant_path)
+                for config in configs:
+                    try:
+                        text = _pytesseract.image_to_string(variant_path, lang='ind+eng', config=config)
+                        if text and text.strip():
+                            texts.append(text.strip())
+                    except Exception as e:
+                        logger.debug(f'[pytesseract] Variant OCR failed: {e}')
+        return texts
+
+    @staticmethod
     def _detect_name_in_text(text):
         """Detect person names using indicator keywords to prevent false positives."""
         if not text:
             return False
+        normalized = PrivacyService._normalize_ocr_text(text)
         name_indicators = re.compile('\\b(?:nama|name|an\\.|a\\.n\\.?|narna|noma)\\b\\s*[:.\\-]?\\s*([A-Za-z\\s\\.]{3,40})', re.IGNORECASE)
         hama_indicator = re.compile('\\bhama\\b\\s*[:.\\-]?\\s*([A-Z\\s\\.]{3,40})(?![a-z])')
-        if name_indicators.search(text) or hama_indicator.search(text):
+        if name_indicators.search(normalized) or hama_indicator.search(normalized):
             return True
         ktp_header = re.compile('(?:provinsi|paovinsi).{5,50}?(?:nik|kik|n1k)\\b', re.IGNORECASE)
-        if ktp_header.search(text):
+        if ktp_header.search(normalized):
             return True
-        known_sensitive_names = re.compile('\\b(?:prabowo|jokowi|joko\\s+widodo|gibran|anies|ganjar)\\b', re.IGNORECASE)
-        if known_sensitive_names.search(text):
+        if PrivacyService._contains_known_sensitive_name(normalized):
             return True
         return False
+
+    @staticmethod
+    def _contains_known_sensitive_name(text):
+        """Detect common public/person names even with OCR character noise."""
+        normalized = PrivacyService._normalize_ocr_text(text)
+        known_sensitive_names = re.compile('\\b(?:prabowo|jokowi|joko\\s+widodo|gibran|anies|ganjar|subianto|widodo)\\b', re.IGNORECASE)
+        if known_sensitive_names.search(normalized):
+            return True
+        compact = re.sub(r'[^a-z0-9]', '', str(text or '').lower())
+        compact = compact.translate(str.maketrans({'0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't'}))
+        fuzzy_names = ('prabowo', 'jokowi', 'jokowidodo', 'jokowidododo', 'gibran', 'anies', 'ganjar', 'subianto', 'widodo')
+        return any(name in compact for name in fuzzy_names)
+
+    @staticmethod
+    def _normalize_ocr_text(text):
+        """Normalize common OCR confusions before applying privacy regexes."""
+        text = str(text or '')
+        replacements = {
+            '|': 'I',
+            '0': 'O',
+            '1': 'I',
+            '3': 'E',
+            '4': 'A',
+            '5': 'S',
+            '7': 'T',
+        }
+        for old, new in replacements.items():
+            text = text.replace(old, new)
+        return text
 
     @staticmethod
     def _detect_age_in_text(text):
@@ -222,6 +357,9 @@ class PrivacyService:
             result['age_detected'] = PrivacyService._detect_age_in_text(detected_text)
             result['address_detected'] = PrivacyService._detect_address_in_text(detected_text)
             result['phone_detected'] = PrivacyService._detect_phone_in_text(detected_text)
+            if not result['face_detected'] and result['name_detected'] and PrivacyService._contains_known_sensitive_name(detected_text):
+                result['face_detected'] = True
+                logger.info('[Privacy] Inferred face/person presence from known public figure name in OCR text')
         flags = [result['face_detected'], result['name_detected'], result['age_detected'], result['address_detected'], result['phone_detected']]
         result['total_flags'] = sum(flags)
         result['is_blocked'] = result['total_flags'] >= threshold

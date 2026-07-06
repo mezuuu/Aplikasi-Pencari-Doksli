@@ -35,6 +35,7 @@ class HealthCheckView(APIView):
             'service': 'pencari-doksli-api',
             'original_count': original_count,
             'google_vision_api_configured': bool(settings.GOOGLE_CLOUD_API_KEY),
+            'privacy_flag_threshold': settings.PRIVACY_FLAG_THRESHOLD,
             'privacy_detectors': PrivacyService.get_capabilities(),
         }, status=status.HTTP_200_OK)
 

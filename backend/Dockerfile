@@ -8,6 +8,8 @@ ENV PORT=7860
 
 # Install dependencies sistem untuk OpenCV
 RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    wget \
     libgl1 \
     libglib2.0-0 \
     tesseract-ocr \
@@ -17,6 +19,13 @@ RUN apt-get update && apt-get install -y \
 
 # Set working directory
 WORKDIR /app
+
+# Add a lightweight OpenCV DNN face detector for production privacy fallback.
+RUN mkdir -p /app/models && \
+    wget -q -O /app/models/deploy.prototxt \
+        https://raw.githubusercontent.com/opencv/opencv/master/samples/dnn/face_detector/deploy.prototxt && \
+    wget -q -O /app/models/res10_300x300_ssd_iter_140000.caffemodel \
+        https://github.com/opencv/opencv_3rdparty/raw/dnn_samples_face_detector_20170830/res10_300x300_ssd_iter_140000.caffemodel
 
 # Copy requirements dan install
 COPY requirements.txt /app/
