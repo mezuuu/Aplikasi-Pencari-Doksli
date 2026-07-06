@@ -50,6 +50,7 @@ class PrivacyService:
         """Return detector availability for deployment diagnostics."""
         return {
             'opencv': _cv2 is not None,
+            'opencv_haar_face': PrivacyService._has_haar_face_cascade(),
             'opencv_dnn_face': PrivacyService._has_dnn_face_model(),
             'easyocr': _easyocr is not None,
             'pytesseract': _pytesseract is not None,
@@ -61,6 +62,16 @@ class PrivacyService:
         proto_path = os.path.join(model_dir, 'deploy.prototxt')
         model_path = os.path.join(model_dir, 'res10_300x300_ssd_iter_140000.caffemodel')
         return os.path.exists(proto_path) and os.path.exists(model_path)
+
+    @staticmethod
+    def _has_haar_face_cascade():
+        if _cv2 is None:
+            return False
+        cascade_path = os.path.join(_cv2.data.haarcascades, 'haarcascade_frontalface_default.xml')
+        if not os.path.exists(cascade_path):
+            return False
+        cascade = _cv2.CascadeClassifier(cascade_path)
+        return not cascade.empty()
 
     @staticmethod
     def _local_detect_faces(image_path):
@@ -78,26 +89,114 @@ class PrivacyService:
             if dnn_faces:
                 logger.info(f'[OpenCV DNN] Local face detection: {len(dnn_faces)} face(s)')
                 return dnn_faces
-            height, width = img.shape[:2]
-            min_side = min(width, height)
-            min_face = max(24, int(min_side * 0.06))
-            gray = _cv2.cvtColor(img, _cv2.COLOR_BGR2GRAY)
-            gray_eq = _cv2.equalizeHist(gray)
-            cascade_path = _cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-            face_cascade = _cv2.CascadeClassifier(cascade_path)
-            faces = face_cascade.detectMultiScale(gray_eq, scaleFactor=1.08, minNeighbors=4, minSize=(min_face, min_face))
-            if len(faces) == 0:
-                faces = face_cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=3, minSize=(min_face, min_face))
-            if len(faces) == 0:
-                profile_path = _cv2.data.haarcascades + 'haarcascade_profileface.xml'
-                profile_cascade = _cv2.CascadeClassifier(profile_path)
-                faces = profile_cascade.detectMultiScale(gray_eq, scaleFactor=1.08, minNeighbors=4, minSize=(min_face, min_face))
-            result = [{'x': int(x), 'y': int(y), 'w': int(w), 'h': int(h)} for x, y, w, h in faces]
+            result = PrivacyService._haar_detect_faces(img)
             logger.info(f'[OpenCV] Local face detection: {len(result)} face(s)')
             return result
         except Exception as e:
             logger.error(f'[OpenCV] Local face detection error: {e}')
             return []
+
+    @staticmethod
+    def _haar_detect_faces(img):
+        """Detect faces with Haar cascades across conservative image regions."""
+        height, width = img.shape[:2]
+        min_side = min(width, height)
+        min_face = max(24, int(min_side * 0.035))
+        max_face = int(min_side * 0.45)
+        cascade_names = [
+            'haarcascade_frontalface_default.xml',
+            'haarcascade_frontalface_alt2.xml',
+            'haarcascade_profileface.xml',
+        ]
+        cascades = []
+        for cascade_name in cascade_names:
+            cascade_path = os.path.join(_cv2.data.haarcascades, cascade_name)
+            if not os.path.exists(cascade_path):
+                logger.warning(f'[OpenCV] Haar cascade missing: {cascade_name}')
+                continue
+            cascade = _cv2.CascadeClassifier(cascade_path)
+            if cascade.empty():
+                logger.warning(f'[OpenCV] Haar cascade could not be loaded: {cascade_name}')
+                continue
+            cascades.append((cascade_name, cascade))
+
+        if not cascades:
+            return []
+
+        regions = [
+            ('full', img, 0, 0, 1.0),
+            ('left', img[:int(height * 0.78), :int(width * 0.65)], 0, 0, 1.0),
+            ('left_mid', img[int(height * 0.20):int(height * 0.82), :int(width * 0.65)], 0, int(height * 0.20), 1.0),
+            ('center', img[int(height * 0.15):int(height * 0.80), int(width * 0.12):int(width * 0.88)], int(width * 0.12), int(height * 0.15), 1.0),
+        ]
+        attempts = [
+            (1.0, 1.08, 4),
+            (1.0, 1.05, 3),
+            (1.0, 1.03, 3),
+            (1.5, 1.08, 3),
+            (1.5, 1.05, 3),
+        ]
+        faces = []
+        for region_name, region, offset_x, offset_y, _ in regions:
+            if region.size == 0:
+                continue
+            for resize_scale, scale_factor, min_neighbors in attempts:
+                if resize_scale != 1.0:
+                    work = _cv2.resize(region, None, fx=resize_scale, fy=resize_scale, interpolation=_cv2.INTER_CUBIC)
+                else:
+                    work = region
+                gray = _cv2.cvtColor(work, _cv2.COLOR_BGR2GRAY)
+                gray_variants = (gray, _cv2.equalizeHist(gray))
+                scaled_min_face = max(20, int(min_face * resize_scale))
+                scaled_max_face = max(scaled_min_face + 1, int(max_face * resize_scale))
+                for gray_img in gray_variants:
+                    for cascade_name, cascade in cascades:
+                        detected = cascade.detectMultiScale(
+                            gray_img,
+                            scaleFactor=scale_factor,
+                            minNeighbors=min_neighbors,
+                            minSize=(scaled_min_face, scaled_min_face),
+                            maxSize=(scaled_max_face, scaled_max_face),
+                        )
+                        for x, y, w, h in detected:
+                            aspect = w / float(h or 1)
+                            if aspect < 0.65 or aspect > 1.45:
+                                continue
+                            face = {
+                                'x': int(offset_x + x / resize_scale),
+                                'y': int(offset_y + y / resize_scale),
+                                'w': int(w / resize_scale),
+                                'h': int(h / resize_scale),
+                                'detector': cascade_name.replace('haarcascade_', '').replace('.xml', ''),
+                                'region': region_name,
+                            }
+                            faces.append(face)
+                    if faces:
+                        return PrivacyService._dedupe_faces(faces)
+        return PrivacyService._dedupe_faces(faces)
+
+    @staticmethod
+    def _dedupe_faces(faces):
+        """Remove strongly overlapping face boxes."""
+        deduped = []
+        for face in sorted(faces, key=lambda item: item['w'] * item['h'], reverse=True):
+            if not any(PrivacyService._face_iou(face, existing) > 0.35 for existing in deduped):
+                deduped.append(face)
+        return deduped
+
+    @staticmethod
+    def _face_iou(a, b):
+        ax1, ay1, ax2, ay2 = a['x'], a['y'], a['x'] + a['w'], a['y'] + a['h']
+        bx1, by1, bx2, by2 = b['x'], b['y'], b['x'] + b['w'], b['y'] + b['h']
+        inter_x1, inter_y1 = max(ax1, bx1), max(ay1, by1)
+        inter_x2, inter_y2 = min(ax2, bx2), min(ay2, by2)
+        inter_w, inter_h = max(0, inter_x2 - inter_x1), max(0, inter_y2 - inter_y1)
+        intersection = inter_w * inter_h
+        if intersection == 0:
+            return 0.0
+        area_a = max(1, a['w'] * a['h'])
+        area_b = max(1, b['w'] * b['h'])
+        return intersection / float(area_a + area_b - intersection)
 
     @staticmethod
     def _dnn_detect_faces(img):
