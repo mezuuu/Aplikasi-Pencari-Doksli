@@ -12,6 +12,8 @@ for pixel-level verification of top candidates.
 """
 import logging
 import os
+import base64
+import mimetypes
 import numpy as np
 from django.conf import settings
 logger = logging.getLogger(__name__)
@@ -24,6 +26,38 @@ except ImportError:
 
 
 class SimilarityService:
+
+    @staticmethod
+    def _document_image_path(doc):
+        """Return a readable local image path for an OriginalDocument."""
+        doc_image_path = None
+        if hasattr(doc, 'image_path'):
+            doc_image_path = str(doc.image_path)
+        elif isinstance(doc, dict):
+            doc_image_path = doc.get('image_path') or doc.get('path')
+        if doc_image_path and os.path.exists(doc_image_path):
+            return doc_image_path
+
+        image_data = getattr(doc, 'image_data', None)
+        if not image_data:
+            return doc_image_path if doc_image_path and os.path.exists(doc_image_path) else None
+
+        try:
+            mime_type = getattr(doc, 'image_mime_type', 'image/jpeg') or 'image/jpeg'
+            ext = mimetypes.guess_extension(mime_type) or '.jpg'
+            if ext == '.jpe':
+                ext = '.jpg'
+            cache_dir = os.path.join(str(settings.MEDIA_ROOT), 'cached_originals')
+            os.makedirs(cache_dir, exist_ok=True)
+            doc_id = getattr(doc, 'id', 'document')
+            cached_path = os.path.join(cache_dir, f'{doc_id}{ext}')
+            if not os.path.exists(cached_path):
+                with open(cached_path, 'wb') as f:
+                    f.write(base64.b64decode(image_data))
+            return cached_path
+        except Exception as e:
+            logger.warning(f'Could not materialize original image from DB fallback: {e}')
+            return None
 
     @staticmethod
     def cosine_similarity(vec_a, vec_b):
@@ -239,24 +273,10 @@ class SimilarityService:
         ranked = []
         for candidate in candidates:
             doc = candidate.get('document')
-            doc_image_path = None
-            if hasattr(doc, 'image_path'):
-                doc_image_path = str(doc.image_path)
-            elif isinstance(doc, dict):
-                doc_image_path = doc.get('image_path') or doc.get('path')
+            doc_image_path = SimilarityService._document_image_path(doc)
             if not doc_image_path:
                 continue
             embedding_score = candidate.get('score', 0.0)
-            if not os.path.exists(doc_image_path):
-                ranked.append({
-                    **candidate,
-                    'score': round(embedding_score, 6),
-                    'embedding_score': round(embedding_score, 6),
-                    'phash_score': 0.0,
-                    'orb_score': 0.0,
-                    'hist_score': 0.0,
-                })
-                continue
             ph_score = SimilarityService.phash_similarity(query_image_path, doc_image_path)
             orb_score_val = SimilarityService.orb_similarity(query_image_path, doc_image_path)
             hist_score = SimilarityService.histogram_similarity(query_image_path, doc_image_path)
@@ -284,6 +304,54 @@ class SimilarityService:
                 f"hist={best['hist_score']:.4f}, emb={best['embedding_score']:.4f})"
             )
         return ranked
+
+    @staticmethod
+    def is_reliable_local_match(match):
+        """
+        Decide whether a local candidate is strong enough to stop online fallback.
+
+        Embeddings alone often match the same person, topic, or template. Local
+        Doksli matches must also show same-base-image evidence from pHash/ORB.
+        """
+        score = float(match.get('score', 0.0) or 0.0)
+        phash = float(match.get('phash_score', 0.0) or 0.0)
+        orb = float(match.get('orb_score', 0.0) or 0.0)
+        local_threshold = getattr(settings, 'LOCAL_MATCH_THRESHOLD', 0.62)
+        phash_threshold = getattr(settings, 'LOCAL_PHASH_THRESHOLD', 0.82)
+        orb_threshold = getattr(settings, 'LOCAL_ORB_THRESHOLD', 0.08)
+        strong_phash = getattr(settings, 'LOCAL_STRONG_PHASH_THRESHOLD', 0.90)
+        strong_orb = getattr(settings, 'LOCAL_STRONG_ORB_THRESHOLD', 0.18)
+
+        if score < local_threshold:
+            return False
+        if phash >= strong_phash or orb >= strong_orb:
+            return True
+        if phash >= phash_threshold and orb >= orb_threshold:
+            return True
+        return False
+
+    @staticmethod
+    def filter_reliable_local_matches(candidates, top_k=None):
+        """Keep only local candidates with enough exact-image evidence."""
+        if top_k is None:
+            top_k = getattr(settings, 'SIMILARITY_TOP_K', 5)
+        accepted = []
+        rejected = []
+        for match in candidates:
+            if SimilarityService.is_reliable_local_match(match):
+                accepted.append(match)
+            else:
+                rejected.append(match)
+        if rejected:
+            best_rejected = rejected[0]
+            logger.info(
+                f"Rejected {len(rejected)} weak local candidate(s). Best rejected: "
+                f"score={best_rejected.get('score', 0):.4f}, "
+                f"pHash={best_rejected.get('phash_score', 0):.4f}, "
+                f"ORB={best_rejected.get('orb_score', 0):.4f}, "
+                f"emb={best_rejected.get('embedding_score', 0):.4f}"
+            )
+        return accepted[:top_k]
 
     @staticmethod
     def re_rank_web_candidates(query_image_path, query_embedding, candidates):

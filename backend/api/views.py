@@ -23,6 +23,12 @@ from .models import OriginalDocument, SearchQuery, PrivacyAnalysis, SearchResult
 from .serializers import SearchQuerySerializer, OriginalDocumentSerializer, OriginalDocumentListSerializer
 logger = logging.getLogger(__name__)
 
+def _db_web_source(search_source):
+    """Map internal online providers to DB/frontend source labels."""
+    if search_source in ('bing', 'gemini+bing'):
+        return 'bing'
+    return 'google'
+
 class HealthCheckView(APIView):
     authentication_classes = []
     permission_classes = []
@@ -124,12 +130,8 @@ class SearchImageView(APIView):
             if local_original_count:
                 local_candidates = SimilarityService.find_candidate_pool(query_embedding)
                 local_candidates = SimilarityService.re_rank_local_candidates(filepath, local_candidates)
-                local_threshold = getattr(settings, 'LOCAL_MATCH_THRESHOLD', 0.5)
                 top_k = getattr(settings, 'SIMILARITY_TOP_K', 5)
-                local_matches = [
-                    match for match in local_candidates
-                    if match.get('score', 0) >= local_threshold
-                ][:top_k]
+                local_matches = SimilarityService.filter_reliable_local_matches(local_candidates, top_k=top_k)
                 if local_matches:
                     logger.info(
                         f"Local search accepted {len(local_matches)} match(es). "
@@ -138,7 +140,7 @@ class SearchImageView(APIView):
                 else:
                     logger.info(
                         f'Local search checked {local_original_count} document(s) '
-                        f'but found no match above threshold {local_threshold}.'
+                        'but found no reliable Doksli match. Continuing fallback search.'
                     )
             else:
                 logger.warning('Local search skipped because original document database is empty.')
@@ -169,19 +171,15 @@ class SearchImageView(APIView):
                                     seen[doc_id] = match
                             best_crop_matches = sorted(seen.values(), key=lambda x: x['score'], reverse=True)
                             best_crop_matches = SimilarityService.re_rank_local_candidates(filepath, best_crop_matches)
-                            local_threshold = getattr(settings, 'LOCAL_MATCH_THRESHOLD', 0.5)
                             top_k = getattr(settings, 'SIMILARITY_TOP_K', 5)
-                            best_crop_matches = [
-                                match for match in best_crop_matches
-                                if match.get('score', 0) >= local_threshold
-                            ][:top_k]
+                            best_crop_matches = SimilarityService.filter_reliable_local_matches(best_crop_matches, top_k=top_k)
                             for match in best_crop_matches:
                                 SearchResult.objects.create(search=search_query, source_type='local', matched_document=match['document'], similarity_score=match['score'])
                             local_matches = best_crop_matches
                             if local_matches:
                                 logger.info(f"Sub-region search found {len(local_matches)} match(es). Best score: {local_matches[0]['score']}")
                             else:
-                                logger.info(f'Sub-region search found no match above threshold {local_threshold}.')
+                                logger.info('Sub-region search found no reliable local Doksli match.')
                 except Exception as e:
                     logger.error(f'Sub-region search error: {e}', exc_info=True)
                 finally:
@@ -200,6 +198,8 @@ class SearchImageView(APIView):
                     online_result = OnlineSearchService.search_online(filepath, max_candidates=10)
                     web_candidates = online_result.get('candidates', [])
                     search_source = online_result.get('search_source', 'none')
+                    search_query.search_source = _db_web_source(search_source)
+                    search_query.save(update_fields=['search_source'])
                     if web_candidates:
                         ranked_web = SimilarityService.re_rank_web_candidates(filepath, query_embedding, web_candidates)
                         online_threshold = getattr(settings, 'ONLINE_MATCH_THRESHOLD', 0.65)
@@ -207,17 +207,11 @@ class SearchImageView(APIView):
                             ranked for ranked in ranked_web
                             if ranked.get('score', 0) >= online_threshold
                         ]
-                        source_map = {'google': 'google', 'yandex': 'google', 'bing': 'bing'}
-                        db_source_type = source_map.get(search_source, 'google')
+                        db_source_type = _db_web_source(search_source)
                         for ranked in ranked_web:
                             SearchResult.objects.create(search=search_query, source_type=db_source_type, matched_image_path='', external_url=ranked.get('url', ''), similarity_score=ranked['score'])
                         from services.online_search_service import OnlineSearchService
                         OnlineSearchService.cleanup_candidates(web_candidates)
-                        if search_source != 'none':
-                            search_query.search_source = search_source
-                        else:
-                            search_query.search_source = 'google'
-                        search_query.save(update_fields=['search_source'])
                         logger.info(
                             f'Online search accepted {len(ranked_web)} candidate(s) '
                             f'above threshold {online_threshold} (source: {search_source})'

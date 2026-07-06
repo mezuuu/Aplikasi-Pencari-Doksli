@@ -177,7 +177,11 @@ os.environ.setdefault('GOOGLE_APPLICATION_CREDENTIALS', GOOGLE_APPLICATION_CREDE
 SIMILARITY_THRESHOLD = 0.80   # Minimum local embedding score to count as a direct match
 SIMILARITY_MIN = 0.6          # Absolute floor for direct local embedding matches
 LOCAL_CANDIDATE_MIN = 0.35    # Wider local pool before visual re-ranking
-LOCAL_MATCH_THRESHOLD = 0.50  # Minimum visual re-ranked local score to accept
+LOCAL_MATCH_THRESHOLD = 0.62  # Minimum visual re-ranked local score to accept
+LOCAL_PHASH_THRESHOLD = 0.82  # Same-base-image evidence for local matches
+LOCAL_ORB_THRESHOLD = 0.08    # Structural keypoint evidence for local matches
+LOCAL_STRONG_PHASH_THRESHOLD = 0.90
+LOCAL_STRONG_ORB_THRESHOLD = 0.18
 ONLINE_MATCH_THRESHOLD = 0.65 # Minimum web score to show as a candidate
 SIMILARITY_TOP_K = 5          # Maximum results to return
 PRIVACY_FLAG_THRESHOLD = int(os.getenv('PRIVACY_FLAG_THRESHOLD', '3'))  # Block if >= N privacy flags detected

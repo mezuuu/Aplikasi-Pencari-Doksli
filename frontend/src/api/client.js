@@ -14,7 +14,7 @@ const apiBase = normalizeApiBase(import.meta.env.VITE_API_URL)
 
 const client = axios.create({
     baseURL: apiBase ? `${apiBase}/api` : '/api',
-    timeout: 120000, // 2 min timeout for ML processing
+    timeout: 300000, // 5 min timeout for ML + online fallback
 })
 
 /**
