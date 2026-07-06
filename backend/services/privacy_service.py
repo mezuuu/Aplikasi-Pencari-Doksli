@@ -58,6 +58,10 @@ class PrivacyService:
 
     @staticmethod
     def _has_dnn_face_model():
+        if _cv2 is None or not hasattr(_cv2, 'dnn'):
+            return False
+        if not hasattr(_cv2.dnn, 'readNetFromCaffe') or not hasattr(_cv2.dnn, 'blobFromImage'):
+            return False
         model_dir = os.path.join(settings.BASE_DIR, 'models')
         proto_path = os.path.join(model_dir, 'deploy.prototxt')
         model_path = os.path.join(model_dir, 'res10_300x300_ssd_iter_140000.caffemodel')
@@ -65,7 +69,7 @@ class PrivacyService:
 
     @staticmethod
     def _has_haar_face_cascade():
-        if _cv2 is None:
+        if _cv2 is None or not hasattr(_cv2, 'CascadeClassifier'):
             return False
         cascade_path = PrivacyService._get_haar_cascade_path('haarcascade_frontalface_default.xml')
         if not cascade_path:
@@ -87,6 +91,9 @@ class PrivacyService:
 
     @staticmethod
     def _load_haar_cascade(cascade_name):
+        if _cv2 is None or not hasattr(_cv2, 'CascadeClassifier'):
+            logger.warning('[OpenCV] CascadeClassifier unavailable in this cv2 build')
+            return None
         cascade_path = PrivacyService._get_haar_cascade_path(cascade_name)
         if not cascade_path:
             logger.warning(f'[OpenCV] Haar cascade missing: {cascade_name}')
@@ -228,26 +235,52 @@ class PrivacyService:
             model_path = os.path.join(model_dir, 'res10_300x300_ssd_iter_140000.caffemodel')
             net = _cv2.dnn.readNetFromCaffe(proto_path, model_path)
             height, width = img.shape[:2]
-            blob = _cv2.dnn.blobFromImage(_cv2.resize(img, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0))
-            net.setInput(blob)
-            detections = net.forward()
+            regions = [
+                ('full', img, 0, 0),
+                ('left', img[:int(height * 0.78), :int(width * 0.65)], 0, 0),
+                ('left_mid', img[int(height * 0.20):int(height * 0.82), :int(width * 0.65)], 0, int(height * 0.20)),
+                ('center', img[int(height * 0.15):int(height * 0.80), int(width * 0.12):int(width * 0.88)], int(width * 0.12), int(height * 0.15)),
+            ]
             faces = []
-            for i in range(detections.shape[2]):
-                confidence = float(detections[0, 0, i, 2])
-                if confidence < 0.35:
+            for region_name, region, offset_x, offset_y in regions:
+                if region.size == 0:
                     continue
-                box = detections[0, 0, i, 3:7] * [width, height, width, height]
-                x1, y1, x2, y2 = box.astype('int')
-                x1, y1 = max(0, x1), max(0, y1)
-                x2, y2 = min(width, x2), min(height, y2)
-                if x2 <= x1 or y2 <= y1:
-                    continue
-                face_w = x2 - x1
-                face_h = y2 - y1
-                if face_w < 18 or face_h < 18:
-                    continue
-                faces.append({'x': int(x1), 'y': int(y1), 'w': int(face_w), 'h': int(face_h), 'confidence': confidence})
-            return faces
+                region_height, region_width = region.shape[:2]
+                blob = _cv2.dnn.blobFromImage(
+                    _cv2.resize(region, (300, 300)),
+                    1.0,
+                    (300, 300),
+                    (104.0, 177.0, 123.0)
+                )
+                net.setInput(blob)
+                detections = net.forward()
+                for i in range(detections.shape[2]):
+                    confidence = float(detections[0, 0, i, 2])
+                    if confidence < 0.25:
+                        continue
+                    box = detections[0, 0, i, 3:7] * [region_width, region_height, region_width, region_height]
+                    x1, y1, x2, y2 = box.astype('int')
+                    x1, y1 = max(0, x1), max(0, y1)
+                    x2, y2 = min(region_width, x2), min(region_height, y2)
+                    if x2 <= x1 or y2 <= y1:
+                        continue
+                    face_w = x2 - x1
+                    face_h = y2 - y1
+                    aspect = face_w / float(face_h or 1)
+                    if face_w < 18 or face_h < 18 or aspect < 0.55 or aspect > 1.65:
+                        continue
+                    faces.append({
+                        'x': int(offset_x + x1),
+                        'y': int(offset_y + y1),
+                        'w': int(face_w),
+                        'h': int(face_h),
+                        'confidence': confidence,
+                        'detector': 'dnn',
+                        'region': region_name,
+                    })
+                if faces:
+                    return PrivacyService._dedupe_faces(faces)
+            return PrivacyService._dedupe_faces(faces)
         except Exception as e:
             logger.warning(f'[OpenCV DNN] Face detection failed: {e}')
             return []
