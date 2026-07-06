@@ -38,6 +38,7 @@ COPY requirements.txt /app/
 # Install versi CPU dari PyTorch agar ukurannya lebih kecil (wajib untuk server gratis)
 RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements.txt
+RUN python -c "import cv2; assert hasattr(cv2, 'CascadeClassifier'), 'OpenCV CascadeClassifier missing'; assert hasattr(cv2, 'dnn'), 'OpenCV dnn module missing'; assert hasattr(cv2.dnn, 'readNetFromCaffe'), 'OpenCV Caffe DNN loader missing'"
 
 # Copy seluruh kode backend
 COPY . /app/
