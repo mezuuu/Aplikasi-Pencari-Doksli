@@ -198,11 +198,13 @@ class SearchImageView(APIView):
             try:
                 from services.online_search_service import OnlineSearchService
                 from services.similarity_service import SimilarityService
+                online_fetch_limit = min(max(web_limit * 2, web_limit), 20)
                 logger.info(
                     f'Starting online search with limit={web_limit} '
+                    f'fetch={online_fetch_limit} '
                     f'(local reliable={len(local_matches)}/{local_limit}).'
                 )
-                online_result = OnlineSearchService.search_online(filepath, max_candidates=web_limit)
+                online_result = OnlineSearchService.search_online(filepath, max_candidates=online_fetch_limit)
                 web_candidates = online_result.get('candidates', [])
                 search_source = online_result.get('search_source', 'none')
                 if web_candidates:
