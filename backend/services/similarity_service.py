@@ -384,11 +384,19 @@ class SimilarityService:
     """
         if not candidates:
             return []
-        from services.embedding_service import EmbeddingService
-        W_PHASH = 0.3
-        W_ORB = 0.3
-        W_HIST = 0.2
-        W_EMB = 0.2
+        use_embedding = getattr(settings, 'WEB_RERANK_WITH_EMBEDDING', False)
+        if use_embedding:
+            from services.embedding_service import EmbeddingService
+            W_PHASH = 0.3
+            W_ORB = 0.3
+            W_HIST = 0.2
+            W_EMB = 0.2
+        else:
+            EmbeddingService = None
+            W_PHASH = 0.4
+            W_ORB = 0.4
+            W_HIST = 0.2
+            W_EMB = 0.0
         ranked = []
         for candidate in candidates:
             candidate_path = candidate.get('path')
@@ -398,8 +406,11 @@ class SimilarityService:
                 ph_score = SimilarityService.phash_similarity(query_image_path, candidate_path)
                 orb_score_val = SimilarityService.orb_similarity(query_image_path, candidate_path)
                 hist_score = SimilarityService.histogram_similarity(query_image_path, candidate_path)
-                candidate_embedding = EmbeddingService.extract_embedding(candidate_path)
-                emb_score = SimilarityService.cosine_similarity(query_embedding, candidate_embedding)
+                if use_embedding:
+                    candidate_embedding = EmbeddingService.extract_embedding(candidate_path)
+                    emb_score = SimilarityService.cosine_similarity(query_embedding, candidate_embedding)
+                else:
+                    emb_score = 0.0
                 combined_score = W_PHASH * ph_score + W_ORB * orb_score_val + W_HIST * hist_score + W_EMB * emb_score
                 if orb_score_val < 0.05 and ph_score < 0.75:
                     combined_score *= 0.5

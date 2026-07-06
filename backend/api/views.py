@@ -147,7 +147,7 @@ class SearchImageView(APIView):
             else:
                 logger.warning('Local search skipped because original document database is empty.')
             crop_paths = []
-            if len(local_matches) < local_limit:
+            if len(local_matches) < local_limit and getattr(settings, 'ENABLE_CROP_FALLBACK', False):
                 try:
                     from services.cropping_service import CroppingService
                     crop_paths = CroppingService.generate_crop_regions(filepath)
@@ -198,7 +198,7 @@ class SearchImageView(APIView):
             try:
                 from services.online_search_service import OnlineSearchService
                 from services.similarity_service import SimilarityService
-                online_fetch_limit = min(max(web_limit * 2, web_limit), 20)
+                online_fetch_limit = web_limit
                 logger.info(
                     f'Starting online search with limit={web_limit} '
                     f'fetch={online_fetch_limit} '

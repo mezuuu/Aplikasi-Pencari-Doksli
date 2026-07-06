@@ -8,4 +8,4 @@ echo "=== Collecting static files ==="
 python manage.py collectstatic --noinput
 
 echo "=== Starting Gunicorn server ==="
-exec gunicorn --bind 0.0.0.0:7860 --workers 1 --timeout 300 config.wsgi:application
+exec gunicorn --bind 0.0.0.0:7860 --workers 1 --worker-class gthread --threads 2 --timeout 300 config.wsgi:application
